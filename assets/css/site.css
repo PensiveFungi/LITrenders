@@ -307,6 +307,10 @@ main { padding-top: var(--nav-h); }
   color: var(--muted);
   border-top: 1px solid var(--line);
 }
+/* A card whose app opens straight into the running thing rather than a page. */
+.app-card--live { border-color: var(--line-strong); }
+.app-meta .live { display: inline-flex; align-items: center; gap: 8px; color: var(--ink); font-weight: 600; }
+.app-meta .live::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ink); }
 .badge {
   display: inline-block;
   font-size: .68rem;

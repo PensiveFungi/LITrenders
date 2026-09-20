@@ -55,8 +55,10 @@ header{background:linear-gradient(135deg,var(--pri),var(--pri-d));color:#fff;box
 header h1{font-size:1.4rem;font-weight:700;display:flex;align-items:center;gap:10px}
 header p{opacity:.8;font-size:.82rem;margin-top:3px}
 .hdr-row{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.hdr-actions{flex:none;display:flex;align-items:center;gap:10px}
 .theme-btn{flex:none;width:38px;height:38px;border:1px solid rgba(255,255,255,.35);border-radius:8px;
   background:rgba(255,255,255,.12);color:#fff;font-size:1rem;line-height:1;cursor:pointer;
+  text-decoration:none;
   display:flex;align-items:center;justify-content:center;transition:background .2s,border-color .2s}
 .theme-btn:hover{background:rgba(255,255,255,.22);border-color:rgba(255,255,255,.6)}
 .theme-btn:focus-visible{outline:2px solid #fff;outline-offset:2px}
@@ -208,6 +210,14 @@ header p{opacity:.8;font-size:.82rem;margin-top:3px}
   .settings-divider{width:100%;height:1px}
   .rate-info{max-width:none}
 }
+/* Two header buttons instead of one: give the title back the width it lost
+   on a phone rather than letting "Budget Calendar" break onto two lines. */
+@media(max-width:430px){
+  header{padding-left:calc(18px + env(safe-area-inset-left));padding-right:calc(18px + env(safe-area-inset-right))}
+  header h1{font-size:1.2rem}
+  .hdr-actions{gap:8px}
+  .theme-btn{width:34px;height:34px}
+}
 </style>
 </head>
 <body>
@@ -218,8 +228,20 @@ header p{opacity:.8;font-size:.82rem;margin-top:3px}
       <h1>📅 <span data-t="title">Budget Calendar</span></h1>
       <p data-t="subtitle">Track daily grocery expenses with spillover, monthly "other" expenses &amp; savings</p>
     </div>
-    <button type="button" id="themeBtn" class="theme-btn" onclick="toggleTheme()"
-            aria-label="Toggle dark mode" title="Toggle dark mode" aria-pressed="false">🌙</button>
+    <div class="hdr-actions">
+      <!-- Info: the app is the landing point, so this is the way back to the
+           page that explains it (privacy, terms, support). Hidden when the app
+           is embedded in that page's iframe — see the boot script at the end. -->
+      <a id="infoBtn" class="theme-btn" href="./" target="_top"
+         aria-label="About this app" title="About Budget Calendar">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="9"/><path d="M12 11.2v5"/><path d="M12 7.6h.01"/>
+        </svg>
+      </a>
+      <button type="button" id="themeBtn" class="theme-btn" onclick="toggleTheme()"
+              aria-label="Toggle dark mode" title="Toggle dark mode" aria-pressed="false">🌙</button>
+    </div>
   </div>
 </header>
 
@@ -2414,6 +2436,17 @@ if (window.matchMedia) {
   if (mq.addEventListener) mq.addEventListener('change', onScheme);
   else if (mq.addListener) mq.addListener(onScheme);
 }
+
+/* The (i) button is the way out of the standalone app and back to the page
+   that documents it. Inside that page's own iframe it would just reload the
+   page underneath, so it is dropped when the app is embedded. */
+(function () {
+  var i = document.getElementById('infoBtn');
+  if (!i) return;
+  var framed = true;
+  try { framed = window.self !== window.top; } catch (e) { framed = true; }
+  if (framed && i.parentNode) i.parentNode.removeChild(i);
+})();
 </script>
 <footer id="webBuildFoot">
   <p><strong>Budget Calendar</strong> &mdash; web version. This page runs entirely in your browser; everything you
