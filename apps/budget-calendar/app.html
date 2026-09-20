@@ -1,0 +1,2372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Budget Calendar — web version — LITrenders</title>
+<meta name="description" content="Budget Calendar running in your browser: the same interface that ships inside the Android app. Everything you enter stays in this browser.">
+<link rel="canonical" href="https://litrenders.com/apps/budget-calendar/app.html">
+<meta property="og:title" content="Budget Calendar — web version — LITrenders">
+<meta property="og:description" content="Budget Calendar running in your browser: the same interface that ships inside the Android app.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://litrenders.com/apps/budget-calendar/app.html">
+<meta property="og:image" content="https://litrenders.com/assets/img/icon-512.png">
+<meta name="twitter:card" content="summary">
+<meta name="theme-color" content="#2563eb">
+<link rel="icon" href="../../assets/img/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" href="../../assets/img/favicon-64.png">
+<link rel="apple-touch-icon" href="../../assets/img/apple-touch-icon.png">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --pri:#2563eb;--pri-l:#dbeafe;
+  --ok:#16a34a;--ok-l:#dcfce7;
+  --warn:#d97706;--warn-l:#fef3c7;
+  --bad:#dc2626;--bad-l:#fee2e2;
+  --sav:#7c3aed;--sav-l:#ede9fe;
+  --bg:#f1f5f9;--card:#fff;--txt:#1e293b;--muted:#64748b;--border:#e2e8f0;
+  --r:8px;--sh:0 1px 3px rgba(0,0,0,.1);
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--txt);line-height:1.5;overflow-x:hidden}
+header{background:linear-gradient(135deg,var(--pri),#1d4ed8);color:#fff;box-shadow:0 2px 8px rgba(37,99,235,.3);
+  /* Edge-to-edge is enforced from API 35. Content would otherwise slide
+     under the status bar. Zero effect where the insets are 0. */
+  padding:calc(18px + env(safe-area-inset-top)) calc(32px + env(safe-area-inset-right)) 18px calc(32px + env(safe-area-inset-left))}
+header h1{font-size:1.4rem;font-weight:700;display:flex;align-items:center;gap:10px}
+header p{opacity:.8;font-size:.82rem;margin-top:3px}
+.container{max-width:1200px;margin:0 auto;
+  padding:24px calc(24px + env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) calc(24px + env(safe-area-inset-left))}
+
+/* Settings */
+.settings{background:var(--card);border-radius:var(--r);padding:18px 24px;box-shadow:var(--sh);display:flex;gap:18px;align-items:flex-end;flex-wrap:wrap;margin-bottom:18px}
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.field input,.field select{padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:.88rem;outline:none;transition:border-color .2s}
+.field input:focus,.field select:focus{border-color:var(--pri)}
+.field input[type=number]{width:135px}.field input[type=date]{width:160px}
+.field select{width:145px}
+.settings-divider{width:1px;height:40px;background:var(--border);align-self:center}
+.field-rate{position:relative}
+/* Replaces the alert() that the removed Apply button used to trigger:
+   with auto-apply, a modal on every keystroke would be unusable. */
+.field-err{font-size:.68rem;color:var(--bad);min-height:0;line-height:1.3}
+.field input.invalid{border-color:var(--bad)}
+/* Flows under the input rather than floating below it: the line carries a
+   rate, a date, a provenance label and two links, and an absolutely
+   positioned version overlapped the next field once it wrapped. */
+.rate-info{margin-top:3px;font-size:.7rem;color:var(--muted);line-height:1.35;max-width:220px}
+.rate-info a{color:var(--pri);cursor:pointer;text-decoration:underline}
+
+.btn{padding:8px 18px;border:none;border-radius:6px;font-size:.85rem;font-weight:500;cursor:pointer;transition:all .2s}
+.btn-pri{background:var(--pri);color:#fff}.btn-pri:hover{background:#1d4ed8}
+.btn-bad{background:var(--bad);color:#fff}.btn-bad:hover{background:#b91c1c}
+.btn-sm{padding:4px 10px;font-size:.75rem}
+.btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}.btn-ghost:hover{background:var(--bg);color:var(--txt)}
+
+/* Summary */
+.summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:24px}
+.s-card{background:var(--card);border-radius:var(--r);padding:14px 18px;box-shadow:var(--sh)}
+.s-card.highlight{border:2px solid var(--sav)}
+.s-card .lbl{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:3px}
+.s-card .val{font-size:1.35rem;font-weight:700;overflow-wrap:anywhere}
+.s-card .sub{overflow-wrap:anywhere}
+.s-card .sub{font-size:.75rem;color:var(--muted);margin-top:2px}
+.progress{height:5px;background:var(--bg);border-radius:3px;margin-top:8px;overflow:hidden}
+.progress-fill{height:100%;border-radius:3px;transition:width .3s}
+
+/* Calendar */
+.cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.cal-head h2{font-size:1.15rem;font-weight:600}
+.cal-nav{display:flex;gap:6px}
+.cal-nav button{width:34px;height:34px;border:1px solid var(--border);background:var(--card);border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1rem;transition:all .2s}
+.cal-nav button:hover{background:var(--bg);border-color:var(--pri)}
+
+/* minmax(0,1fr), not 1fr: grid items default to min-width:auto, so a long
+   amount like $U20000.00 pushes the 7th column off screen on a phone. */
+.cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.wk-hdr{padding:6px;text-align:center;font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--muted)}
+.day{background:var(--card);border-radius:6px;padding:7px 8px;min-height:95px;border:2px solid transparent;transition:all .15s;position:relative}
+.day.empty{background:transparent;min-height:0;border:none}
+.day.inactive{background:var(--bg);opacity:.45;pointer-events:none}
+.day.active{cursor:pointer}
+.day.active:hover{border-color:var(--pri);box-shadow:0 2px 8px rgba(37,99,235,.12)}
+.day.today{border-color:var(--pri)}
+.day.st-good{border-left:3px solid var(--ok)}
+.day.st-warn{border-left:3px solid var(--warn)}
+.day.st-bad{border-left:3px solid var(--bad)}
+.day.st-over{background:var(--bad-l);border-left:3px solid var(--bad)}
+.day-num{font-size:.82rem;font-weight:700;margin-bottom:3px}
+.day-inf{font-size:.63rem;color:var(--muted);line-height:1.45}
+.day-inf span{white-space:nowrap;display:inline-block;max-width:100%}
+.day-inf .g{color:var(--ok);font-weight:600}
+.day-inf .o{color:var(--pri);font-weight:600}
+.day-inf .sv{color:var(--sav);font-weight:600}
+.day-inf .d{color:var(--bad);font-weight:600}
+.day-inf .s{color:var(--ok);font-weight:600}
+.day-bar{height:3px;background:#e2e8f0;border-radius:2px;margin-top:5px;overflow:hidden}
+.day-bar-fill{height:100%;border-radius:2px;transition:width .3s}
+.has-other::after{content:'●';position:absolute;top:6px;right:8px;color:var(--pri);font-size:.5rem}
+.has-sav::before{content:'●';position:absolute;top:6px;right:18px;color:var(--sav);font-size:.5rem}
+
+/* Modal */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;justify-content:center;align-items:center;padding:20px}
+.overlay.open{display:flex}
+.modal{background:var(--card);border-radius:12px;width:100%;max-width:500px;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)}
+.m-hdr{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.m-hdr h3{font-size:1.05rem;font-weight:600}
+.m-close{width:30px;height:30px;border:none;background:transparent;cursor:pointer;font-size:1.1rem;color:var(--muted);border-radius:6px;display:flex;align-items:center;justify-content:center}
+.m-close:hover{background:var(--bg)}
+.m-body{padding:18px 22px}
+.m-sec{margin-bottom:18px}.m-sec:last-child{margin-bottom:0}
+.m-sec h4{font-size:.82rem;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:7px}
+
+.binfo{background:var(--bg);border-radius:8px;padding:12px 14px;margin-bottom:14px}
+.binfo-row{display:flex;justify-content:space-between;font-size:.82rem;padding:2px 0}
+.binfo-row.total{border-top:1px solid var(--border);margin-top:4px;padding-top:6px;font-weight:700}
+
+.exp-list{list-style:none;margin-bottom:10px}
+.exp-item{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--bg);border-radius:6px;margin-bottom:3px;font-size:.82rem}
+.exp-item .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.exp-item .am{font-weight:700;margin:0 10px;white-space:nowrap}
+.exp-item .del{background:none;border:none;color:var(--bad);cursor:pointer;font-size:.95rem;padding:2px 5px;border-radius:4px}
+.exp-item .del:hover{background:var(--bad-l)}
+
+.add-form{display:flex;gap:6px}
+.add-form input{padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:.82rem;outline:none}
+.add-form input:focus{border-color:var(--pri)}
+.add-form input[type=text]{flex:1;min-width:0}
+.add-form input[type=number]{width:95px}
+
+.empty-msg{text-align:center;padding:32px 20px;color:var(--muted)}
+.empty-msg .icon{font-size:2.5rem;margin-bottom:8px}
+
+/* Monthly Expense List */
+.recur-panel{background:var(--card);border-radius:var(--r);box-shadow:var(--sh);margin-top:20px;overflow:hidden}
+.recur-hdr{padding:14px 20px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;border-bottom:1px solid var(--border);transition:background .15s}
+.recur-hdr:hover{background:var(--bg)}
+.recur-hdr h3{font-size:.95rem;font-weight:700;display:flex;align-items:center;gap:8px}
+.recur-hdr .badge{background:var(--pri);color:#fff;font-size:.65rem;font-weight:700;padding:2px 7px;border-radius:10px}
+.recur-hdr .chevron{font-size:.85rem;color:var(--muted);transition:transform .2s}
+.recur-hdr .chevron.open{transform:rotate(180deg)}
+.recur-body{padding:0}
+.recur-body.collapsed{display:none}
+
+.exp-cat-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--bg);border-bottom:1px solid var(--border);font-size:.82rem;font-weight:700}
+.exp-cat-empty{padding:14px 16px;text-align:center;color:var(--muted);font-size:.8rem;font-style:italic;border-bottom:1px solid var(--border)}
+
+.recur-table{width:100%;border-collapse:collapse;font-size:.82rem}
+.recur-table th{text-align:left;padding:10px 16px;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);background:var(--bg);border-bottom:1px solid var(--border)}
+.recur-table th:last-child,.recur-table td:last-child{text-align:right;width:100px}
+.recur-table th:nth-child(2),.recur-table td:nth-child(2){text-align:center;width:60px}
+.recur-table td{padding:9px 16px;border-bottom:1px solid var(--border)}
+.recur-table tr:last-child td{border-bottom:none}
+.recur-table tr:hover td{background:var(--bg)}
+.cat-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:.7rem;font-weight:600}
+.cat-badge.groc{background:var(--ok-l);color:var(--ok)}
+.cat-badge.other{background:var(--pri-l);color:var(--pri)}
+.cat-badge.sav{background:var(--sav-l);color:var(--sav)}
+.recur-empty{padding:28px;text-align:center;color:var(--muted);font-size:.85rem}
+.recur-foot{background:var(--bg);padding:10px 16px;display:flex;justify-content:flex-end;gap:20px;font-size:.82rem;font-weight:600;border-top:1px solid var(--border)}
+
+@media(max-width:768px){
+  .settings{flex-direction:column;align-items:stretch}
+  .field input,.field select{width:100%!important}
+  .day{min-height:65px;padding:4px}
+  .day-inf{font-size:.55rem}
+  .container{padding:10px calc(10px + env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left))}
+  /* ch units, not px: at a 200% system font scale the cards need twice
+     the room, and auto-fit then drops the grid to a single column instead
+     of pushing the page sideways. */
+  .summary{grid-template-columns:repeat(auto-fit,minmax(min(100%,16ch),1fr))}
+  .recur-table th,.recur-table td{padding:7px 10px;font-size:.75rem}
+  .settings-divider{width:100%;height:1px}
+  .rate-info{max-width:none}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📅 <span data-t="title">Budget Calendar</span></h1>
+  <p data-t="subtitle">Track daily grocery expenses with spillover, monthly "other" expenses &amp; savings</p>
+</header>
+
+<div class="container">
+  <!-- Settings -->
+  <div class="settings" id="settings">
+    <div class="field">
+      <label data-t="language">Language</label>
+      <select id="inLang" onchange="changeLang(this.value)" style="width:145px">
+        <option value="en">English</option>
+        <option value="es">Español</option>
+        <option value="pt">Português</option>
+        <option value="fr">Français</option>
+        <option value="de">Deutsch</option>
+        <option value="it">Italiano</option>
+        <option value="zh">中文</option>
+        <option value="ja">日本語</option>
+        <option value="ko">한국어</option>
+        <option value="ru">Русский</option>
+        <option value="hi">हिन्दी</option>
+        <option value="tr">Türkçe</option>
+      </select>
+    </div>
+    <div class="field">
+      <label data-t="mainCurrency">Main Currency</label>
+      <select id="inMainCur" onchange="onCurrencyChange()"></select>
+    </div>
+    <div class="field">
+      <label data-t="savCurrency">Savings Currency</label>
+      <select id="inSavCur" onchange="onCurrencyChange()"></select>
+    </div>
+    <div class="settings-divider"></div>
+    <div class="field">
+      <label data-t="startDate">Start Date</label>
+      <input type="date" id="inStart" onchange="scheduleApply(0)">
+    </div>
+    <div class="field">
+      <label data-t="endDate">End Date</label>
+      <input type="date" id="inEnd" onchange="scheduleApply(0)">
+      <div class="field-err" id="dateErr"></div>
+    </div>
+    <div class="field">
+      <label data-t="monthlyBudget">Monthly Budget</label>
+      <input type="number" id="inBudget" min="0" step="0.01" placeholder="0.00" oninput="scheduleApply()" onchange="scheduleApply(0)">
+    </div>
+    <div class="field field-rate">
+      <label id="lblSavForeign">Savings (USD)</label>
+      <input type="number" id="inSavForeign" min="0" step="0.01" placeholder="0.00" oninput="syncSavingsPreview('foreign');scheduleApply()" onchange="scheduleApply(0)">
+      <div class="rate-info" id="rateInfo"></div>
+    </div>
+    <div class="field">
+      <label id="lblSavMain">Savings (UYU)</label>
+      <input type="number" id="inSavMain" min="0" step="0.01" placeholder="0.00" oninput="syncSavingsPreview('main');scheduleApply()" onchange="scheduleApply(0)">
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-ghost" onclick="exportData()" data-t="exportData">Export</button>
+      <button class="btn btn-ghost" onclick="importData()" data-t="importData">Import</button>
+      <button class="btn btn-ghost" onclick="clearAll()" data-t="resetAll">Reset All</button>
+      <!-- Reopens Google's ad consent form. Hidden by default: the native
+           shell reveals it only where consent law gives the user a standing
+           right to change their answer. Never appears in a browser. -->
+      <button class="btn btn-ghost" id="btnPrivacy" style="display:none"
+              onclick="openPrivacyOptions()" data-t="privacyOptions">Ad privacy</button>
+    </div>
+  </div>
+
+  <!-- Summary -->
+  <div class="summary" id="summary"></div>
+
+  <!-- Calendar -->
+  <div id="calendarWrap"></div>
+
+  <!-- Monthly Expenses -->
+  <div id="recurringWrap"></div>
+</div>
+
+<!-- Modal -->
+<div class="overlay" id="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modal"></div>
+</div>
+
+<script>
+/* ---- money.js, inlined for the web build ---- */
+/* ============================================================================
+ * money.js — integer minor-unit money model for Budget Calendar
+ * ----------------------------------------------------------------------------
+ * INVARIANTS (do not break these without changing the schema version):
+ *
+ *  1. Every PERSISTED amount is an integer number of minor units, paired with
+ *     an ISO 4217 code that is implied by the ledger it lives in.
+ *  2. Nothing stored is ever a converted value. Conversion happens at display
+ *     time only, and never writes back.
+ *  3. Arithmetic (division into daily budgets, spillover) carries FRACTIONAL
+ *     minor units at full float precision. Rounding happens exactly once, at
+ *     the formatting boundary. Never round mid-calculation.
+ *  4. Two ledgers, each internally exact:
+ *       - account ledger : budget, groceries, other   -> accountCurrency
+ *       - savings ledger : savings budget, savings    -> savingsCurrency
+ *     Conversion appears only where the two are summed for display.
+ *
+ * Loaded both in the browser (window.Money) and in Node (module.exports) so
+ * the model can be unit-tested without driving a browser.
+ * ==========================================================================*/
+;(function (root, factory) {
+  var api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  if (root) root.Money = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
+
+  /* ------------------------------------------------------------------ *
+   * Minor-unit exponents
+   *
+   * The STORAGE exponent must not depend on the device's ICU build. The
+   * same stored integer has to mean the same amount on every device that
+   * ever opens this data — if the exponent came from Intl, a device with
+   * different ICU data would read budgetMinor:4500000 as 4,500,000 rather
+   * than 45,000.00. So:
+   *
+   *   table first  -> deterministic, pinned to ISO 4217
+   *   Intl second  -> covers codes not in the table
+   *   2 last       -> the ISO default
+   *
+   * The table lists every currency whose ISO exponent is not 2, so a
+   * missing entry correctly defaults to 2.
+   *
+   * Known divergence: ICU/CLDR formats IQD with 0 decimals while ISO 4217
+   * assigns it 3. We store 3 (no precision lost) and let Intl display it
+   * however CLDR prefers. auditExponents() reports any such divergence.
+   * ------------------------------------------------------------------ */
+  var EXP_FALLBACK = {
+    BIF: 0, CLP: 0, DJF: 0, GNF: 0, ISK: 0, JPY: 0, KMF: 0, KRW: 0,
+    PYG: 0, RWF: 0, UGX: 0, UYI: 0, VND: 0, VUV: 0, XAF: 0, XOF: 0, XPF: 0,
+    BHD: 3, IQD: 3, JOD: 3, KWD: 3, LYD: 3, OMR: 3, TND: 3,
+    CLF: 4, UYW: 4
+  };
+
+  var expCache = Object.create(null);
+  var POW10 = [1, 10, 100, 1000, 10000];
+
+  /** ISO 4217 minor-unit exponent for `cur` (0, 2, 3, 4...). */
+  function minorExp(cur) {
+    if (cur in expCache) return expCache[cur];
+    var e = null;
+    if (cur in EXP_FALLBACK) {
+      e = EXP_FALLBACK[cur];                 // pinned; never ICU-dependent
+    } else {
+      try {
+        var ro = new Intl.NumberFormat('en', {
+          style: 'currency', currency: cur
+        }).resolvedOptions();
+        if (typeof ro.maximumFractionDigits === 'number' &&
+            ro.maximumFractionDigits >= 0 && ro.maximumFractionDigits <= 4) {
+          e = ro.maximumFractionDigits;
+        }
+      } catch (err) { /* unknown code or no ICU currency data */ }
+    }
+    if (e === null) e = 2;
+    expCache[cur] = e;
+    return e;
+  }
+
+  /** Report where the device's ICU disagrees with the pinned table.
+   *  Informational: storage always follows the table. Used by the test
+   *  runner and the on-device diagnostics page to spot a trimmed ICU
+   *  build (which would affect Phase 3 display, not stored values). */
+  function auditExponents() {
+    var bad = [];
+    for (var cur in EXP_FALLBACK) {
+      var viaIntl = null;
+      try {
+        viaIntl = new Intl.NumberFormat('en', {
+          style: 'currency', currency: cur
+        }).resolvedOptions().maximumFractionDigits;
+      } catch (e) { /* ignore */ }
+      if (viaIntl !== EXP_FALLBACK[cur]) {
+        bad.push({ currency: cur, intl: viaIntl, table: EXP_FALLBACK[cur] });
+      }
+    }
+    return bad;
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Parsing: decimal string -> integer minor units
+   *
+   * Done by STRING SURGERY, not float multiplication, so 1234.565 in a
+   * 2-decimal currency cannot land on 123456.49999999999.
+   * Rounding is half-up on the first discarded digit.
+   *
+   * Accepts only a plain machine-decimal ("-1234.56"), which is what
+   * <input type="number">.value always yields regardless of locale.
+   * Locale-aware entry (German "1.234,56") arrives in Phase 2 and will
+   * normalise to this shape before calling in.
+   * ------------------------------------------------------------------ */
+  var MAX_MINOR = 9007199254740991; // Number.MAX_SAFE_INTEGER
+
+  function parseDecimalToMinor(input, cur) {
+    var exp = minorExp(cur);
+    var s = String(input == null ? '' : input).trim();
+    if (!s) return null;
+
+    var neg = false;
+    if (s.charAt(0) === '+' ) { s = s.slice(1); }
+    else if (s.charAt(0) === '-') { neg = true; s = s.slice(1); }
+    if (!/^\d*(?:\.\d*)?$/.test(s) || s === '' || s === '.') return null;
+
+    var dot = s.indexOf('.');
+    var intPart  = dot === -1 ? s : s.slice(0, dot);
+    var fracPart = dot === -1 ? '' : s.slice(dot + 1);
+    if (intPart === '') intPart = '0';
+
+    var minor;
+    if (fracPart.length <= exp) {
+      while (fracPart.length < exp) fracPart += '0';
+      minor = Number(intPart + fracPart);
+    } else {
+      var kept = fracPart.slice(0, exp);
+      var nextDigit = fracPart.charCodeAt(exp) - 48;
+      minor = Number(intPart + kept);
+      if (nextDigit >= 5) minor += 1;          // half-up
+    }
+    if (!isFinite(minor) || minor > MAX_MINOR) return null;
+    return neg ? -minor : minor;
+  }
+
+  /** Integer/fractional minor units -> a JS number in major units.
+   *  ONLY for handing to Intl.NumberFormat or toFixed at the display edge. */
+  function toMajor(minorish, cur) {
+    return minorish / POW10[minorExp(cur)];
+  }
+
+  /** Major-unit number -> integer minor units. Used by the v2 migration,
+   *  where the source data is already a float and no string exists. */
+  function majorFloatToMinor(major, cur) {
+    var exp = minorExp(cur);
+    if (typeof major !== 'number' || !isFinite(major)) return 0;
+    // toFixed first so 12.345 * 100 = 1234.4999999999998 rounds correctly.
+    return Math.round(Number((major * POW10[exp]).toFixed(4)));
+  }
+
+  /** Round fractional minor units to a whole minor unit. The ONLY rounding
+   *  permitted inside a calculation is this one, at the display boundary. */
+  function roundMinor(minorish) {
+    return Math.round(minorish);
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Conversion — display only, never persisted.
+   *
+   * A rate table is { base: 'USD', asOf: 'YYYY-MM-DD', rates: {CODE: n} }
+   * where rates[X] is "units of X per 1 unit of base". rates[base] === 1.
+   *
+   * Cross-rate A -> base -> B is a SINGLE expression with ONE rounding at
+   * the end. No intermediate rounding, no round-tripping of stored values.
+   * ------------------------------------------------------------------ */
+  function crossRate(from, to, table) {
+    if (from === to) return 1;
+    if (!table || !table.rates) return null;
+    var rf = table.rates[from], rt = table.rates[to];
+    if (!(rf > 0) || !(rt > 0)) return null;
+    return rt / rf;
+  }
+
+  /**
+   * Convert integer (or fractional) minor units of `from` into minor units
+   * of `to`. Returns fractional minor units — the caller rounds once, at
+   * format time. Returns null when no rate is available; callers must
+   * render a placeholder rather than a wrong number.
+   */
+  function convertMinorRaw(minorish, from, to, table) {
+    if (from === to) return minorish;
+    var r = crossRate(from, to, table);
+    if (r === null) return null;
+    return minorish * r * POW10[minorExp(to)] / POW10[minorExp(from)];
+  }
+
+  /** Same, rounded to whole minor units. Use only where a stored-shaped
+   *  integer is genuinely needed (never for writing back to storage). */
+  function convertMinor(minorish, from, to, table) {
+    var raw = convertMinorRaw(minorish, from, to, table);
+    return raw === null ? null : Math.round(raw);
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Formatting
+   *
+   * legacyFormat reproduces the pre-migration look exactly
+   * (symbol immediately followed by a fixed-point number) so that Phase 1
+   * is visually inert. The only difference is that the number of decimals
+   * now follows the currency instead of being hardcoded to 2, which is a
+   * bug fix for JPY/KRW/CLP/PYG (0 dp) and KWD/BHD (3 dp).
+   *
+   * Phase 3 replaces this with Intl.NumberFormat.
+   * ------------------------------------------------------------------ */
+  function legacyFormat(minorish, cur, symbol) {
+    var exp = minorExp(cur);
+    return symbol + Math.abs(toMajor(minorish, cur)).toFixed(exp);
+  }
+
+  function legacyFormatSigned(minorish, cur, symbol) {
+    return (minorish < 0 ? '−' : '') + legacyFormat(minorish, cur, symbol);
+  }
+
+  /** Plain major-unit decimal string for putting a stored value back into
+   *  an <input type="number">. No symbol, no grouping, and a trailing
+   *  all-zero fraction is dropped so the settings boxes read exactly as
+   *  they did before the migration ("45000", not "45000.00"). Parsing the
+   *  result returns the identical minor value. */
+  function toInputString(minorish, cur) {
+    if (minorish === 0 || minorish == null) return '';
+    var s = toMajor(minorish, cur).toFixed(minorExp(cur));
+    if (s.indexOf('.') !== -1) s = s.replace(/0+$/, '').replace(/\.$/, '');
+    return s;
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Schema + migration
+   * ------------------------------------------------------------------ */
+  var KEY_V2 = 'budgetCalState_v2';
+  var KEY_V3 = 'budgetCalState_v3';
+  var KEY_V2_BACKUP = 'budgetCalState_v2_backup';
+
+  function defaultState() {
+    return {
+      schema: 3,
+      lang: 'en',
+      accountCurrency: 'UYU',
+      savingsCurrency: 'USD',
+      displayCurrency: 'UYU',
+      budgetMinor: 0,
+      savingsBudgetMinor: 0,
+      startDate: '',
+      endDate: '',
+      rateOverrides: {},
+      legacyExchangeRate: 0,
+      expenses: {},
+      viewYear: 0,
+      viewMonth: 0,
+      migration: null
+    };
+  }
+
+  /**
+   * v2 -> v3.
+   *
+   * v2 stored EVERY amount as a float in the main (account) currency,
+   * including savings. Under the two-ledger model the savings ledger is
+   * denominated in the savings currency, so savings amounts get a ONE-TIME
+   * conversion at the rate v2 had cached.
+   *
+   * If no usable rate exists we do NOT guess: the savings currency is
+   * collapsed to the account currency and the numbers are carried across
+   * untouched. Losing the currency label is recoverable; inventing a
+   * conversion is not.
+   *
+   * Returns { state, report }. Never mutates the input.
+   */
+  function migrateV2(v2) {
+    var s = defaultState();
+    var report = {
+      from: 2, to: 3,
+      savingsConverted: false,
+      savingsRate: null,
+      savingsCollapsed: false,
+      notes: []
+    };
+    if (!v2 || typeof v2 !== 'object') {
+      report.notes.push('no v2 state found; created defaults');
+      return { state: s, report: report };
+    }
+
+    var acct = typeof v2.currencyCode === 'string' && v2.currencyCode
+      ? v2.currencyCode : 'UYU';
+    var sav = typeof v2.savCurrencyCode === 'string' && v2.savCurrencyCode
+      ? v2.savCurrencyCode : acct;
+
+    // v2.exchangeRate: 1 savings currency = X account currency.
+    var rate = (typeof v2.exchangeRate === 'number' && v2.exchangeRate > 0)
+      ? v2.exchangeRate : null;
+
+    if (sav !== acct && rate === null) {
+      report.savingsCollapsed = true;
+      report.notes.push(
+        'no cached rate for ' + sav + '/' + acct +
+        '; savings ledger collapsed to ' + acct + ' with values unchanged');
+      sav = acct;
+    }
+
+    s.lang = typeof v2.lang === 'string' ? v2.lang : 'en';
+    s.accountCurrency = acct;
+    s.savingsCurrency = sav;
+    s.displayCurrency = acct;
+    s.startDate = v2.startDate || '';
+    s.endDate = v2.endDate || '';
+    s.viewYear = v2.viewYear || 0;
+    s.viewMonth = v2.viewMonth || 0;
+    s.legacyExchangeRate = rate || 0;
+
+    s.budgetMinor = majorFloatToMinor(Number(v2.budget) || 0, acct);
+
+    // Savings budget: v2 held BOTH a foreign-currency figure (what the user
+    // typed) and an account-currency figure derived from it (the stored
+    // converted value that this migration exists to delete). Prefer the
+    // figure the user actually entered.
+    if (sav === acct) {
+      s.savingsBudgetMinor = majorFloatToMinor(Number(v2.savingsBudget) || 0, sav);
+    } else if (Number(v2.savingsBudgetForeign) > 0) {
+      s.savingsBudgetMinor =
+        majorFloatToMinor(Number(v2.savingsBudgetForeign), sav);
+      report.notes.push('savings budget taken from user-entered ' + sav + ' value');
+    } else if (Number(v2.savingsBudget) > 0 && rate) {
+      s.savingsBudgetMinor =
+        majorFloatToMinor(Number(v2.savingsBudget) / rate, sav);
+      report.savingsConverted = true;
+      report.notes.push('savings budget back-converted from ' + acct +
+        ' at 1 ' + sav + ' = ' + rate + ' ' + acct);
+    }
+
+    // Expenses. groceries/other stay in the account currency untouched;
+    // savings entries were recorded in the account currency and move to the
+    // savings ledger.
+    var out = {};
+    var src = (v2.expenses && typeof v2.expenses === 'object') ? v2.expenses : {};
+    var savingsRows = 0;
+    for (var ds in src) {
+      if (!Object.prototype.hasOwnProperty.call(src, ds)) continue;
+      var day = src[ds] || {};
+      var rec = { groceries: [], other: [], savings: [] };
+      rec.groceries = mapRows(day.groceries, acct);
+      rec.other     = mapRows(day.other, acct);
+      if (sav === acct) {
+        rec.savings = mapRows(day.savings, acct);
+      } else {
+        rec.savings = (day.savings || []).map(function (e) {
+          savingsRows++;
+          return {
+            d: String(e && e.d != null ? e.d : ''),
+            m: majorFloatToMinor((Number(e && e.a) || 0) / rate, sav)
+          };
+        });
+      }
+      if (rec.groceries.length || rec.other.length || rec.savings.length) {
+        out[ds] = rec;
+      }
+    }
+    s.expenses = out;
+    if (savingsRows > 0) {
+      report.savingsConverted = true;
+      report.savingsRate = rate;
+      report.notes.push(savingsRows + ' savings entries converted ' +
+        acct + ' -> ' + sav + ' at 1 ' + sav + ' = ' + rate + ' ' + acct);
+    }
+
+    s.migration = {
+      at: new Date().toISOString().slice(0, 10),
+      from: 'budgetCalState_v2',
+      backupKey: KEY_V2_BACKUP,
+      savingsRate: rate,
+      savingsCollapsed: report.savingsCollapsed
+    };
+    return { state: s, report: report };
+  }
+
+  function mapRows(rows, cur) {
+    if (!rows || !rows.length) return [];
+    var out = [];
+    for (var i = 0; i < rows.length; i++) {
+      var e = rows[i] || {};
+      out.push({
+        d: String(e.d != null ? e.d : ''),
+        m: majorFloatToMinor(Number(e.a) || 0, cur)
+      });
+    }
+    return out;
+  }
+
+  /**
+   * Load state, migrating v2 -> v3 once and keeping the v2 blob verbatim
+   * under a backup key. The backup is written BEFORE the v3 write and is
+   * never overwritten, so a migration bug costs an afternoon, not the data.
+   */
+  function loadState(storage) {
+    storage = storage || (typeof localStorage !== 'undefined' ? localStorage : null);
+    var result = { state: defaultState(), migrated: false, report: null };
+    if (!storage) return result;
+
+    var rawV3 = null, rawV2 = null;
+    try { rawV3 = storage.getItem(KEY_V3); } catch (e) { /* ignore */ }
+    try { rawV2 = storage.getItem(KEY_V2); } catch (e) { /* ignore */ }
+
+    if (rawV3) {
+      try {
+        var parsed = JSON.parse(rawV3);
+        if (parsed && parsed.schema === 3) {
+          result.state = normalise(parsed);
+          return result;
+        }
+      } catch (e) { /* fall through to v2 */ }
+    }
+
+    if (rawV2) {
+      var v2 = null;
+      try { v2 = JSON.parse(rawV2); } catch (e) { v2 = null; }
+      var m = migrateV2(v2);
+      try {
+        if (storage.getItem(KEY_V2_BACKUP) === null) {
+          storage.setItem(KEY_V2_BACKUP, rawV2);   // backup first
+        }
+      } catch (e) { /* ignore */ }
+      result.state = m.state;
+      result.report = m.report;
+      result.migrated = true;
+      saveState(result.state, storage);
+      return result;
+    }
+
+    return result;
+  }
+
+  function saveState(state, storage) {
+    storage = storage || (typeof localStorage !== 'undefined' ? localStorage : null);
+    if (!storage) return false;
+    try { storage.setItem(KEY_V3, JSON.stringify(state)); return true; }
+    catch (e) { return false; }
+  }
+
+  /** Fill in anything a hand-edited or older v3 blob is missing. */
+  function normalise(s) {
+    var d = defaultState();
+    var hadDisplay = s.displayCurrency;
+    for (var k in d) {
+      if (!Object.prototype.hasOwnProperty.call(d, k)) continue;
+      if (k === 'displayCurrency') continue;   // resolved below, from account
+      if (s[k] === undefined || s[k] === null) s[k] = d[k];
+    }
+    s.displayCurrency = hadDisplay || s.accountCurrency || d.displayCurrency;
+    if (!s.rateOverrides || typeof s.rateOverrides !== 'object') s.rateOverrides = {};
+    if (!s.expenses || typeof s.expenses !== 'object') s.expenses = {};
+    for (var ds in s.expenses) {
+      if (!Object.prototype.hasOwnProperty.call(s.expenses, ds)) continue;
+      var r = s.expenses[ds] || {};
+      if (!Array.isArray(r.groceries)) r.groceries = [];
+      if (!Array.isArray(r.other)) r.other = [];
+      if (!Array.isArray(r.savings)) r.savings = [];
+      s.expenses[ds] = r;
+    }
+    if (!s.displayCurrency) s.displayCurrency = s.accountCurrency;
+    return s;
+  }
+
+  return {
+    KEY_V2: KEY_V2,
+    KEY_V3: KEY_V3,
+    KEY_V2_BACKUP: KEY_V2_BACKUP,
+    EXP_FALLBACK: EXP_FALLBACK,
+    minorExp: minorExp,
+    auditExponents: auditExponents,
+    parseDecimalToMinor: parseDecimalToMinor,
+    majorFloatToMinor: majorFloatToMinor,
+    toMajor: toMajor,
+    roundMinor: roundMinor,
+    crossRate: crossRate,
+    convertMinorRaw: convertMinorRaw,
+    convertMinor: convertMinor,
+    legacyFormat: legacyFormat,
+    legacyFormatSigned: legacyFormatSigned,
+    toInputString: toInputString,
+    defaultState: defaultState,
+    migrateV2: migrateV2,
+    normalise: normalise,
+    loadState: loadState,
+    saveState: saveState
+  };
+});
+
+</script>
+<script>
+// ═══════════════════════════════════════
+// TRANSLATIONS
+// ═══════════════════════════════════════
+const LANG = {
+  en: {
+    title:'Budget Calendar', subtitle:'Track daily grocery expenses with spillover, monthly "other" expenses & savings',
+    language:'Language', monthlyBudget:'Monthly Budget', startDate:'Start Date', endDate:'End Date',
+    mainCurrency:'Main Currency', savCurrency:'Savings Currency', savLabel:'Savings',
+    resetAll:'Reset All',
+    // Summary
+    sumMonthlyBudget:'Monthly Budget', sumMonthlyRemaining:'Monthly Remaining',
+    sumSavingsBudget:'💰 Savings Budget', sumTotalBudget:'Total Budget',
+    sumGroceryBudget:'Grocery Budget', sumGroceriesSpent:'Groceries Spent',
+    sumOtherExpenses:'Other Expenses', sumMonthlySpent:'Monthly Spent',
+    daysInRange:'days in range', ofBudget:'% of budget',
+    baseDaily:'Base daily', currentDaily:'Current daily',
+    deficit:'Deficit', onTrack:'On track', deductedFromBudget:'Deducted from budget',
+    spent:'Spent', left:'Left',
+    // Calendar
+    weekdays:['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
+    months:['January','February','March','April','May','June','July','August','September','October','November','December'],
+    avail:'Avail', groc:'Groc', other:'Other', sav:'Sav', calLeft:'Left',
+    // Modal
+    modalBaseDailyBudget:'Base daily budget', modalDeficitFromPrev:'Deficit from previous day(s)',
+    modalAvailForGroc:'Available for groceries', modalGrocSpent:'Groceries spent',
+    modalRemaining:'Remaining', modalWillBeTaken:'will be taken from the next day(s)',
+    grocTitle:'🛒 Groceries', grocHint:'spillover to next day(s) if over budget', noGrocExpenses:'No grocery expenses',
+    otherTitle:'📦 Other', otherHint:'deducted from monthly budget, redistributes daily', noOtherExpenses:'No other expenses',
+    savTitle:'💰 Savings', savHint:'deducted from savings budget', noSavExpenses:'No savings expenses',
+    descPlaceholder:'Description', defaultGroc:'Groceries', defaultOther:'Other', defaultSav:'Savings',
+    // List
+    listTitle:'📋 Monthly Expenses', listEmpty:'No expenses recorded yet. Click on a day to add expenses.',
+    listEmptyCat:'No expenses in this category', thDesc:'Description', thQty:'Qty', thTotal:'Total',
+    thTotalRow:'Total',
+    exportData:'Export', importData:'Import', privacyOptions:'Ad privacy',
+    importBad:'That file is not a Budget Calendar backup.',
+    importOk:'Data restored.',
+    importConfirm:'Replace ALL current data with this backup? This cannot be undone.',
+    rateEdit:'set manually', rateRefresh:'refresh', rateManual:'manual rate',
+    rateNone:'no rate', rateBundled:'offline copy', rateUpdating:'updating…',
+    convertedAt:'Converted at rate of',
+    ratePrompt:(from,to)=>`Exchange rate\n\nHow many ${to} is 1 ${from}?\n\nLeave empty to go back to the bundled rate.`,
+    entries:n=>`${n} entr${n!==1?'ies':'y'}`,
+    curChangeWarn:(from,to)=>`Change currency from ${from} to ${to}?\n\nAmounts already recorded keep their face value and are NOT converted at any exchange rate: ${from} 1000 becomes ${to} 1000.\n\nIf the two currencies use a different number of decimals, amounts are rounded to fit.\n\nCancel if that is not what you want.`,
+    // Actions
+    clearConfirm:'Clear all data? This cannot be undone.',
+    dateError:'Start date must be before or equal to end date.',
+    setRange:'Set your budget and date range above to get started',
+    dateLocale:'en-US',
+  },
+  es: {
+    title:'Calendario de Presupuesto', subtitle:'Rastrea gastos diarios de súper con arrastre, gastos "otros" mensuales y ahorros',
+    language:'Idioma', monthlyBudget:'Ppto. Mensual', startDate:'Fecha de Inicio', endDate:'Fecha de Fin',
+    mainCurrency:'Moneda Principal', savCurrency:'Moneda Ahorros', savLabel:'Ahorros',
+    resetAll:'Reiniciar',
+    sumMonthlyBudget:'Ppto. Mensual', sumMonthlyRemaining:'Mensual Restante',
+    sumSavingsBudget:'💰 Ppto. Ahorros', sumTotalBudget:'Ppto. Total',
+    sumGroceryBudget:'Ppto. Súper', sumGroceriesSpent:'Gastado Súper',
+    sumOtherExpenses:'Otros Gastos', sumMonthlySpent:'Gastado Mensual',
+    daysInRange:'días en rango', ofBudget:'% del ppto.',
+    baseDaily:'Diario base', currentDaily:'Diario actual',
+    deficit:'Déficit', onTrack:'En camino', deductedFromBudget:'Deducido del ppto.',
+    spent:'Gastado', left:'Queda',
+    weekdays:['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'],
+    months:['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'],
+    avail:'Disp', groc:'Súper', other:'Otro', sav:'Ahorro', calLeft:'Queda',
+    modalBaseDailyBudget:'Presupuesto diario base', modalDeficitFromPrev:'Déficit del día(s) anterior',
+    modalAvailForGroc:'Disponible para súper', modalGrocSpent:'Súper gastado',
+    modalRemaining:'Restante', modalWillBeTaken:'se tomará del próximo día(s)',
+    grocTitle:'🛒 Súper', grocHint:'se arrastra al próximo día(s) si excede', noGrocExpenses:'No hay gastos de súper',
+    otherTitle:'📦 Otros', otherHint:'se deduce del ppto. mensual, redistribuye diario', noOtherExpenses:'No hay otros gastos',
+    savTitle:'💰 Ahorros', savHint:'deducido del ppto. de ahorros', noSavExpenses:'No hay gastos de ahorros',
+    descPlaceholder:'Descripción', defaultGroc:'Súper', defaultOther:'Otros', defaultSav:'Ahorros',
+    listTitle:'📋 Gastos Mensuales', listEmpty:'Aún no hay gastos. Haz clic en un día para agregar.',
+    listEmptyCat:'No hay gastos en esta categoría', thDesc:'Descripción', thQty:'Cant.', thTotal:'Total',
+    thTotalRow:'Total',
+    exportData:'Exportar', importData:'Importar', privacyOptions:'Privacidad de anuncios',
+    importBad:'Ese archivo no es un respaldo de Budget Calendar.',
+    importOk:'Datos restaurados.',
+    importConfirm:'¿Reemplazar TODOS los datos actuales con este respaldo? No se puede deshacer.',
+    rateEdit:'fijar manual', rateRefresh:'actualizar', rateManual:'cotización manual',
+    rateNone:'sin cotización', rateBundled:'copia sin conexión', rateUpdating:'actualizando…',
+    convertedAt:'Convertido a la cotización del',
+    ratePrompt:(from,to)=>`Cotización\n\n¿Cuántos ${to} es 1 ${from}?\n\nDejá vacío para volver a la cotización incluida.`,
+    entries:n=>`${n} entrada${n!==1?'s':''}`,
+    curChangeWarn:(from,to)=>`¿Cambiar la moneda de ${from} a ${to}?\n\nLos importes ya registrados conservan su valor nominal y NO se convierten a ninguna cotización: ${from} 1000 pasa a ser ${to} 1000.\n\nSi las monedas usan distinta cantidad de decimales, los importes se redondean.\n\nCancela si no es lo que querés.`,
+    clearConfirm:'¿Borrar todos los datos? Esto no se puede deshacer.',
+    dateError:'La fecha de inicio debe ser anterior o igual a la de fin.',
+    setRange:'Configura tu presupuesto y rango de fechas arriba para comenzar',
+    dateLocale:'es-UY',
+  },
+  pt: {
+    title:'Budget Calendar', subtitle:'Controle os gastos diários de mercado com saldo acumulado, gastos mensais "outros" e poupança',
+    language:'Idioma', monthlyBudget:'Orçamento Mensal', startDate:'Data de Início', endDate:'Data de Término',
+    mainCurrency:'Moeda Principal', savCurrency:'Moeda de Poupança', savLabel:'Poupança',
+    resetAll:'Zerar Tudo',
+    // Summary
+    sumMonthlyBudget:'Orçamento Mensal', sumMonthlyRemaining:'Restante Mensal',
+    sumSavingsBudget:'💰 Orç. de Poupança', sumTotalBudget:'Orçamento Total',
+    sumGroceryBudget:'Orçamento Mercado', sumGroceriesSpent:'Gasto no Mercado',
+    sumOtherExpenses:'Outras Despesas', sumMonthlySpent:'Gasto Mensal',
+    daysInRange:'dias no período', ofBudget:'% do orç.',
+    baseDaily:'Diária base', currentDaily:'Diária atual',
+    deficit:'Déficit', onTrack:'No caminho', deductedFromBudget:'Deduzido do orç.',
+    spent:'Gasto', left:'Restante',
+    // Calendar
+    weekdays:['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'],
+    months:['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'],
+    avail:'Disp', groc:'Merc', other:'Outro', sav:'Poup', calLeft:'Rest',
+    // Modal
+    modalBaseDailyBudget:'Orçamento diário base', modalDeficitFromPrev:'Déficit dos dias anteriores',
+    modalAvailForGroc:'Disponível para mercado', modalGrocSpent:'Gasto no mercado',
+    modalRemaining:'Restante', modalWillBeTaken:'será descontado dos próximos dias',
+    grocTitle:'🛒 Mercado', grocHint:'saldo acumula para o próximo dia se exceder o orçamento', noGrocExpenses:'Sem gastos de mercado',
+    otherTitle:'📦 Outros', otherHint:'deduzido do orçamento mensal, redistribuído diariamente', noOtherExpenses:'Sem outras despesas',
+    savTitle:'💰 Poupança', savHint:'deduzido do orçamento de poupança', noSavExpenses:'Sem despesas de poupança',
+    descPlaceholder:'Descrição', defaultGroc:'Mercado', defaultOther:'Outros', defaultSav:'Poupança',
+    // List
+    listTitle:'📋 Despesas Mensais', listEmpty:'Nenhuma despesa registrada. Clique em um dia para adicionar.',
+    listEmptyCat:'Nenhuma despesa nesta categoria', thDesc:'Descrição', thQty:'Qtd', thTotal:'Total',
+    thTotalRow:'Total',
+    exportData:'Exportar', importData:'Importar', privacyOptions:'Privacidade dos anúncios',
+    importBad:'Este arquivo não é um backup válido.',
+    importOk:'Dados restaurados.',
+    importConfirm:'Substituir TODOS os dados atuais por este backup? Isso não pode ser desfeito.',
+    rateEdit:'definir manual', rateRefresh:'atualizar', rateManual:'taxa manual',
+    rateNone:'sem taxa', rateBundled:'cópia offline', rateUpdating:'atualizando…',
+    convertedAt:'Convertido à taxa de',
+    ratePrompt:(from,to)=>`Taxa de câmbio\n\nQuantos ${to} equivalem a 1 ${from}?\n\nDeixe vazio para voltar à taxa padrão.`,
+    entries:n=>`${n} entrada${n!==1?'s':''}`,
+    curChangeWarn:(from,to)=>`Mudar moeda de ${from} para ${to}?\n\nOs valores já registrados mantêm seu valor nominal e NÃO são convertidos por nenhuma taxa: ${from} 1000 se torna ${to} 1000.\n\nSe as duas moedas usarem um número diferente de casas decimais, os valores serão arredondados.\n\nCancele se não é isso que deseja.`,
+    // Actions
+    clearConfirm:'Apagar todos os dados? Isso não pode ser desfeito.',
+    dateError:'A data de início deve ser anterior ou igual à data de término.',
+    setRange:'Defina seu orçamento e período de datas acima para começar',
+    dateLocale:'pt-BR',
+  },
+  fr: {
+    title:'Budget Calendar', subtitle:'Suivez les dépenses d\'épicerie avec report, "autres" dépenses mensuelles et épargne',
+    language:'Langue', monthlyBudget:'Budget Mensuel', startDate:'Date de début', endDate:'Date de fin',
+    mainCurrency:'Devise Principale', savCurrency:'Devise d\'Épargne', savLabel:'Épargne',
+    resetAll:'Tout réinitialiser',
+    // Summary
+    sumMonthlyBudget:'Budget Mensuel', sumMonthlyRemaining:'Reste Mensuel',
+    sumSavingsBudget:'💰 Budget d\'Épargne', sumTotalBudget:'Budget Total',
+    sumGroceryBudget:'Budget Épicerie', sumGroceriesSpent:'Dépenses Épicerie',
+    sumOtherExpenses:'Autres Dépenses', sumMonthlySpent:'Dépenses Mensuelles',
+    daysInRange:'jours', ofBudget:'% du budget',
+    baseDaily:'Base journalière', currentDaily:'Actuel journalier',
+    deficit:'Déficit', onTrack:'Dans les temps', deductedFromBudget:'Déduit du budget',
+    spent:'Dépensé', left:'Reste',
+    // Calendar
+    weekdays:['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'],
+    months:['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'],
+    avail:'Disp', groc:'Épic', other:'Autre', sav:'Épar', calLeft:'Reste',
+    // Modal
+    modalBaseDailyBudget:'Budget journalier de base', modalDeficitFromPrev:'Déficit des jours précédents',
+    modalAvailForGroc:'Disponible pour l\'épicerie', modalGrocSpent:'Épicerie dépensée',
+    modalRemaining:'Restant', modalWillBeTaken:'sera prélevé sur les jours suivants',
+    grocTitle:'🛒 Épicerie', grocHint:'reporté sur les jours suivants en cas de dépassement', noGrocExpenses:'Aucune dépense d\'épicerie',
+    otherTitle:'📦 Autre', otherHint:'déduit du budget mensuel, redistribué quotidiennement', noOtherExpenses:'Aucune autre dépense',
+    savTitle:'💰 Épargne', savHint:'déduit du budget d\'épargne', noSavExpenses:'Aucune dépense d\'épargne',
+    descPlaceholder:'Description', defaultGroc:'Épicerie', defaultOther:'Autre', defaultSav:'Épargne',
+    // List
+    listTitle:'📋 Dépenses Mensuelles', listEmpty:'Aucune dépense enregistrée. Cliquez sur un jour pour en ajouter.',
+    listEmptyCat:'Aucune dépense dans cette catégorie', thDesc:'Description', thQty:'Qté', thTotal:'Total',
+    thTotalRow:'Total',
+    exportData:'Exporter', importData:'Importer', privacyOptions:'Confidentialité des annonces',
+    importBad:'Ce fichier n\'est pas une sauvegarde valide.',
+    importOk:'Données restaurées.',
+    importConfirm:'Remplacer TOUTES les données actuelles par cette sauvegarde ? Action irréversible.',
+    rateEdit:'saisie manuelle', rateRefresh:'actualiser', rateManual:'taux manuel',
+    rateNone:'aucun taux', rateBundled:'copie locale', rateUpdating:'mise à jour…',
+    convertedAt:'Converti au taux de',
+    ratePrompt:(from,to)=>`Taux de change\n\nCombien de ${to} font 1 ${from} ?\n\nLaissez vide pour revenir au taux par défaut.`,
+    entries:n=>`${n} entrée${n!==1?'s':''}`,
+    curChangeWarn:(from,to)=>`Changer la devise de ${from} à ${to} ?\n\nLes montants enregistrés conservent leur valeur nominale et NE SONT PAS convertis : ${from} 1000 devient ${to} 1000.\n\nSi les devises utilisent un nombre différent de décimales, les montants sont arrondis.\n\nAnnulez si ce n'est pas ce que vous souhaitez.`,
+    // Actions
+    clearConfirm:'Effacer toutes les données ? Action irréversible.',
+    dateError:'La date de début doit être antérieure ou égale à la date de fin.',
+    setRange:'Définissez votre budget et la plage de dates ci-dessus pour commencer',
+    dateLocale:'fr-FR',
+  },
+  de: {
+    title:'Budget Calendar', subtitle:'Verfolgen Sie tägliche Lebensmittelausgaben mit Übertrag, monatliche "Sonstige"-Ausgaben und Ersparnisse',
+    language:'Sprache', monthlyBudget:'Monatsbudget', startDate:'Startdatum', endDate:'Enddatum',
+    mainCurrency:'Hauptwährung', savCurrency:'Sparwährung', savLabel:'Ersparnisse',
+    resetAll:'Alles zurücksetzen',
+    // Summary
+    sumMonthlyBudget:'Monatsbudget', sumMonthlyRemaining:'Monatlich übrig',
+    sumSavingsBudget:'💰 Sparbudget', sumTotalBudget:'Gesamtbudget',
+    sumGroceryBudget:'Lebensmittelbudget', sumGroceriesSpent:'Lebensmittel ausgegeben',
+    sumOtherExpenses:'Sonstige Ausgaben', sumMonthlySpent:'Monatlich ausgegeben',
+    daysInRange:'Tage', ofBudget:'% des Budgets',
+    baseDaily:'Tägl. Basis', currentDaily:'Tägl. aktuell',
+    deficit:'Defizit', onTrack:'Im Plan', deductedFromBudget:'Vom Budget abgezogen',
+    spent:'Ausgegeben', left:'Übrig',
+    // Calendar
+    weekdays:['So','Mo','Di','Mi','Do','Fr','Sa'],
+    months:['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'],
+    avail:'Verf.', groc:'Lebm.', other:'Sonst', sav:'Spar', calLeft:'Übrig',
+    // Modal
+    modalBaseDailyBudget:'Tägliches Basisbudget', modalDeficitFromPrev:'Defizit der Vortage',
+    modalAvailForGroc:'Verfügbar für Lebensmittel', modalGrocSpent:'Lebensmittel ausgegeben',
+    modalRemaining:'Verbleibend', modalWillBeTaken:'wird von den nächsten Tagen abgezogen',
+    grocTitle:'🛒 Lebensmittel', grocHint:'Übertrag auf nächste Tage bei Budgetüberschreitung', noGrocExpenses:'Keine Lebensmittelausgaben',
+    otherTitle:'📦 Sonstiges', otherHint:'vom Monatsbudget abgezogen, täglich neu verteilt', noOtherExpenses:'Keine sonstigen Ausgaben',
+    savTitle:'💰 Ersparnisse', savHint:'vom Sparbudget abgezogen', noSavExpenses:'Keine Sparausgaben',
+    descPlaceholder:'Beschreibung', defaultGroc:'Lebensmittel', defaultOther:'Sonstiges', defaultSav:'Ersparnisse',
+    // List
+    listTitle:'📋 Monatliche Ausgaben', listEmpty:'Noch keine Ausgaben erfasst. Klicken Sie auf einen Tag.',
+    listEmptyCat:'Keine Ausgaben in dieser Kategorie', thDesc:'Beschreibung', thQty:'Menge', thTotal:'Gesamt',
+    thTotalRow:'Gesamt',
+    exportData:'Exportieren', importData:'Importieren', privacyOptions:'Anzeigen-Datenschutz',
+    importBad:'Diese Datei ist kein gültiges Backup.',
+    importOk:'Daten wiederhergestellt.',
+    importConfirm:'ALLE aktuellen Daten mit diesem Backup überschreiben? Kann nicht rückgängig gemacht werden.',
+    rateEdit:'manuell setzen', rateRefresh:'aktualisieren', rateManual:'manueller Kurs',
+    rateNone:'kein Kurs', rateBundled:'Offline-Kopie', rateUpdating:'aktualisiere…',
+    convertedAt:'Umgerechnet zum Kurs von',
+    ratePrompt:(from,to)=>`Wechselkurs\n\nWie viele ${to} sind 1 ${from}?\n\nLeer lassen, um zum Standardkurs zurückzukehren.`,
+    entries:n=>`${n} ${n!==1?'Einträge':'Eintrag'}`,
+    curChangeWarn:(from,to)=>`Währung von ${from} nach ${to} ändern?\n\nBereits erfasste Beträge behalten ihren Nennwert und werden NICHT umgerechnet: ${from} 1000 wird ${to} 1000.\n\nWenn die Währungen unterschiedlich viele Dezimalstellen haben, werden Beträge gerundet.\n\nAbbrechen, falls dies nicht gewünscht ist.`,
+    // Actions
+    clearConfirm:'Alle Daten löschen? Dies kann nicht rückgängig gemacht werden.',
+    dateError:'Startdatum muss vor oder auf dem Enddatum liegen.',
+    setRange:'Legen Sie oben Budget und Datumsbereich fest, um zu beginnen',
+    dateLocale:'de-DE',
+  },
+  it: {
+    title:'Budget Calendar', subtitle:'Traccia le spese alimentari giornaliere con riporto, "altre" spese mensili e risparmi',
+    language:'Lingua', monthlyBudget:'Budget Mensile', startDate:'Data di Inizio', endDate:'Data di Fine',
+    mainCurrency:'Valuta Principale', savCurrency:'Valuta Risparmio', savLabel:'Risparmi',
+    resetAll:'Reimposta Tutto',
+    // Summary
+    sumMonthlyBudget:'Budget Mensile', sumMonthlyRemaining:'Rimanente Mensile',
+    sumSavingsBudget:'💰 Budget Risparmi', sumTotalBudget:'Budget Totale',
+    sumGroceryBudget:'Budget Alimentari', sumGroceriesSpent:'Alimentari Spesi',
+    sumOtherExpenses:'Altre Spese', sumMonthlySpent:'Spesa Mensile',
+    daysInRange:'giorni', ofBudget:'% del budget',
+    baseDaily:'Base giornaliera', currentDaily:'Attuale giornaliera',
+    deficit:'Deficit', onTrack:'In linea', deductedFromBudget:'Dedotto dal budget',
+    spent:'Speso', left:'Rimanente',
+    // Calendar
+    weekdays:['Dom','Lun','Mar','Mer','Gio','Ven','Sab'],
+    months:['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'],
+    avail:'Disp', groc:'Alim', other:'Altro', sav:'Risp', calLeft:'Rim',
+    // Modal
+    modalBaseDailyBudget:'Budget giornaliero di base', modalDeficitFromPrev:'Deficit dei giorni precedenti',
+    modalAvailForGroc:'Disponibile per alimentari', modalGrocSpent:'Alimentari spesi',
+    modalRemaining:'Rimanente', modalWillBeTaken:'sarà detratto dai prossimi giorni',
+    grocTitle:'🛒 Alimentari', grocHint:'riporto ai giorni successivi se si supera il budget', noGrocExpenses:'Nessuna spesa alimentare',
+    otherTitle:'📦 Altro', otherHint:'dedotto dal budget mensile, ridistribuito giornalmente', noOtherExpenses:'Nessuna altra spesa',
+    savTitle:'💰 Risparmi', savHint:'dedotto dal budget risparmi', noSavExpenses:'Nessuna spesa di risparmio',
+    descPlaceholder:'Descrizione', defaultGroc:'Alimentari', defaultOther:'Altro', defaultSav:'Risparmi',
+    // List
+    listTitle:'📋 Spese Mensili', listEmpty:'Nessuna spesa registrata. Clicca su un giorno.',
+    listEmptyCat:'Nessuna spesa in questa categoria', thDesc:'Descrizione', thQty:'Q.tà', thTotal:'Totale',
+    thTotalRow:'Totale',
+    exportData:'Esporta', importData:'Importa', privacyOptions:'Privacy annunci',
+    importBad:'Questo file non è un backup valido.',
+    importOk:'Dati ripristinati.',
+    importConfirm:'Sostituire TUTTI i dati attuali con questo backup? Impossibile annullare.',
+    rateEdit:'imposta manuale', rateRefresh:'aggiorna', rateManual:'tasso manuale',
+    rateNone:'nessun tasso', rateBundled:'copia offline', rateUpdating:'aggiornamento…',
+    convertedAt:'Convertito al tasso di',
+    ratePrompt:(from,to)=>`Tasso di cambio\n\nQuanti ${to} equivalgono a 1 ${from}?\n\nLascia vuoto per tornare al tasso predefinito.`,
+    entries:n=>`${n} voc${n!==1?'i':'e'}`,
+    curChangeWarn:(from,to)=>`Cambiare valuta da ${from} a ${to}?\n\nGli importi già registrati mantengono il loro valore nominale e NON vengono convertiti: ${from} 1000 diventa ${to} 1000.\n\nSe le due valute usano un numero diverso di decimali, gli importi vengono arrotondati.\n\nAnnulla se non è quello che vuoi.`,
+    // Actions
+    clearConfirm:'Cancellare tutti i dati? Impossibile annullare.',
+    dateError:'La data di inizio deve essere precedente o uguale alla data di fine.',
+    setRange:'Imposta il budget e l\'intervallo di date in alto per iniziare',
+    dateLocale:'it-IT',
+  },
+  zh: {
+    title:'预算日历', subtitle:'带结转功能的日常买菜支出、每月“其他”支出及存款追踪',
+    language:'语言', monthlyBudget:'月预算', startDate:'开始日期', endDate:'结束日期',
+    mainCurrency:'主要货币', savCurrency:'存款货币', savLabel:'存款',
+    resetAll:'全部重置',
+    sumMonthlyBudget:'月预算', sumMonthlyRemaining:'月剩余',
+    sumSavingsBudget:'💰 存款预算', sumTotalBudget:'总预算',
+    sumGroceryBudget:'买菜预算', sumGroceriesSpent:'买菜已花',
+    sumOtherExpenses:'其他支出', sumMonthlySpent:'本月已花',
+    daysInRange:'天数', ofBudget:'% 预算',
+    baseDaily:'基础日均', currentDaily:'当前日均',
+    deficit:'超支', onTrack:'正常', deductedFromBudget:'从预算中扣除',
+    spent:'已花', left:'剩余',
+    weekdays:['日','一','二','三','四','五','六'],
+    months:['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'],
+    avail:'可用', groc:'买菜', other:'其他', sav:'存款', calLeft:'剩余',
+    modalBaseDailyBudget:'基础日预算', modalDeficitFromPrev:'前日超支',
+    modalAvailForGroc:'买菜可用', modalGrocSpent:'买菜已花',
+    modalRemaining:'剩余', modalWillBeTaken:'将从未来几天扣除',
+    grocTitle:'🛒 买菜', grocHint:'如果超支将结转至未来几天', noGrocExpenses:'无买菜支出',
+    otherTitle:'📦 其他', otherHint:'从月预算中扣除，每日重新分配', noOtherExpenses:'无其他支出',
+    savTitle:'💰 存款', savHint:'从存款预算中扣除', noSavExpenses:'无存款支出',
+    descPlaceholder:'描述', defaultGroc:'买菜', defaultOther:'其他', defaultSav:'存款',
+    listTitle:'📋 每月支出', listEmpty:'暂无支出记录。点击日期以添加支出。',
+    listEmptyCat:'该分类下无支出', thDesc:'描述', thQty:'数量', thTotal:'总计',
+    thTotalRow:'总计',
+    exportData:'导出', importData:'导入', privacyOptions:'广告隐私设置',
+    importBad:'该文件不是有效的备份文件。',
+    importOk:'数据已恢复。',
+    importConfirm:'是否使用此备份替换所有当前数据？此操作无法撤销。',
+    rateEdit:'手动设置', rateRefresh:'刷新', rateManual:'手动汇率',
+    rateNone:'无汇率', rateBundled:'离线数据', rateUpdating:'更新中…',
+    convertedAt:'按以下汇率转换',
+    ratePrompt:(from,to)=>`汇率\n\n1 ${from} 兑换多少 ${to}？\n\n留空以恢复默认汇率。`,
+    entries:n=>`${n} 条记录`,
+    curChangeWarn:(from,to)=>`将货币从 ${from} 更改为 ${to}？\n\n已记录的金额将保持其面值，不会按任何汇率进行转换：${from} 1000 将变为 ${to} 1000。\n\n如果两种货币使用不同数量的小数位，金额将被舍入。\n\n如果这不是您想要的结果，请取消。`,
+    clearConfirm:'清除所有数据？此操作无法撤销。',
+    dateError:'开始日期必须早于或等于结束日期。',
+    setRange:'请在上方设置您的预算和日期范围以开始',
+    dateLocale:'zh-CN',
+  },
+  ja: {
+    title:'予算カレンダー', subtitle:'繰越機能付きの毎日の食費、毎月の「その他」の支出と貯金を追跡',
+    language:'言語', monthlyBudget:'月間予算', startDate:'開始日', endDate:'終了日',
+    mainCurrency:'メイン通貨', savCurrency:'貯金通貨', savLabel:'貯金',
+    resetAll:'すべてリセット',
+    sumMonthlyBudget:'月間予算', sumMonthlyRemaining:'月間残り',
+    sumSavingsBudget:'💰 貯金予算', sumTotalBudget:'合計予算',
+    sumGroceryBudget:'食費予算', sumGroceriesSpent:'食費使用額',
+    sumOtherExpenses:'その他の支出', sumMonthlySpent:'月間使用額',
+    daysInRange:'対象日数', ofBudget:'予算の%',
+    baseDaily:'基本の日次', currentDaily:'現在の日次',
+    deficit:'赤字', onTrack:'順調', deductedFromBudget:'予算から控除',
+    spent:'使用額', left:'残り',
+    weekdays:['日','月','火','水','木','金','土'],
+    months:['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'],
+    avail:'可能', groc:'食費', other:'他', sav:'貯金', calLeft:'残り',
+    modalBaseDailyBudget:'基本の日次予算', modalDeficitFromPrev:'前日からの赤字',
+    modalAvailForGroc:'食費の利用可能額', modalGrocSpent:'食費使用額',
+    modalRemaining:'残り', modalWillBeTaken:'翌日以降から引かれます',
+    grocTitle:'🛒 食費', grocHint:'予算オーバーの場合、翌日以降に繰り越し', noGrocExpenses:'食費の支出なし',
+    otherTitle:'📦 その他', otherHint:'月間予算から引かれ、毎日再分配されます', noOtherExpenses:'その他の支出なし',
+    savTitle:'💰 貯金', savHint:'貯金予算から引かれます', noSavExpenses:'貯金の支出なし',
+    descPlaceholder:'説明', defaultGroc:'食費', defaultOther:'その他', defaultSav:'貯金',
+    listTitle:'📋 月間支出', listEmpty:'支出記録がありません。日付をクリックして支出を追加してください。',
+    listEmptyCat:'このカテゴリに支出はありません', thDesc:'説明', thQty:'数量', thTotal:'合計',
+    thTotalRow:'合計',
+    exportData:'エクスポート', importData:'インポート', privacyOptions:'広告のプライバシー',
+    importBad:'このファイルは有効なバックアップではありません。',
+    importOk:'データが復元されました。',
+    importConfirm:'現在のすべてのデータをこのバックアップで置き換えますか？この操作は元に戻せません。',
+    rateEdit:'手動設定', rateRefresh:'更新', rateManual:'手動レート',
+    rateNone:'レートなし', rateBundled:'オフラインコピー', rateUpdating:'更新中…',
+    convertedAt:'換算レート',
+    ratePrompt:(from,to)=>`為替レート\n\n1 ${from} は何 ${to} ですか？\n\nデフォルトのレートに戻すには空のままにしてください。`,
+    entries:n=>`${n} 件`,
+    curChangeWarn:(from,to)=>`通貨を ${from} から ${to} に変更しますか？\n\n記録済みの金額は額面を維持し、為替レートでの換算は行われません：${from} 1000 は ${to} 1000 になります。\n\n2つの通貨で異なる小数点以下の桁数を使用する場合、金額は丸められます。\n\nこれを行いたくない場合はキャンセルしてください。`,
+    clearConfirm:'すべてのデータを消去しますか？この操作は元に戻せません。',
+    dateError:'開始日は終了日以前である必要があります。',
+    setRange:'上記で予算と日付範囲を設定して開始してください',
+    dateLocale:'ja-JP',
+  },
+  ko: {
+    title:'예산 달력', subtitle:'이월 기능이 있는 일일 식비, 월간 "기타" 지출 및 저축 추적',
+    language:'언어', monthlyBudget:'월간 예산', startDate:'시작일', endDate:'종료일',
+    mainCurrency:'기본 통화', savCurrency:'저축 통화', savLabel:'저축',
+    resetAll:'모두 초기화',
+    sumMonthlyBudget:'월간 예산', sumMonthlyRemaining:'월간 남은 금액',
+    sumSavingsBudget:'💰 저축 예산', sumTotalBudget:'총 예산',
+    sumGroceryBudget:'식비 예산', sumGroceriesSpent:'지출한 식비',
+    sumOtherExpenses:'기타 지출', sumMonthlySpent:'월간 지출액',
+    daysInRange:'해당 일수', ofBudget:'예산의 %',
+    baseDaily:'기본 일일', currentDaily:'현재 일일',
+    deficit:'적자', onTrack:'순조로움', deductedFromBudget:'예산에서 차감됨',
+    spent:'지출액', left:'남은 금액',
+    weekdays:['일','월','화','수','목','금','토'],
+    months:['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'],
+    avail:'가능', groc:'식비', other:'기타', sav:'저축', calLeft:'남음',
+    modalBaseDailyBudget:'기본 일일 예산', modalDeficitFromPrev:'이전 일의 적자',
+    modalAvailForGroc:'사용 가능한 식비', modalGrocSpent:'지출한 식비',
+    modalRemaining:'남은 금액', modalWillBeTaken:'다음 날에서 차감됩니다',
+    grocTitle:'🛒 식비', grocHint:'예산 초과 시 다음 날로 이월됨', noGrocExpenses:'식비 지출 없음',
+    otherTitle:'📦 기타', otherHint:'월간 예산에서 차감되며 매일 재분배됨', noOtherExpenses:'기타 지출 없음',
+    savTitle:'💰 저축', savHint:'저축 예산에서 차감됨', noSavExpenses:'저축 지출 없음',
+    descPlaceholder:'설명', defaultGroc:'식비', defaultOther:'기타', defaultSav:'저축',
+    listTitle:'📋 월간 지출', listEmpty:'아직 지출 기록이 없습니다. 날짜를 클릭하여 지출을 추가하세요.',
+    listEmptyCat:'이 카테고리에 지출이 없습니다', thDesc:'설명', thQty:'수량', thTotal:'합계',
+    thTotalRow:'합계',
+    exportData:'내보내기', importData:'가져오기', privacyOptions:'광고 개인정보',
+    importBad:'이 파일은 올바른 백업 파일이 아닙니다.',
+    importOk:'데이터가 복원되었습니다.',
+    importConfirm:'모든 현재 데이터를 이 백업으로 바꾸시겠습니까? 이 작업은 실행 취소할 수 없습니다.',
+    rateEdit:'수동 설정', rateRefresh:'새로고침', rateManual:'수동 환율',
+    rateNone:'환율 없음', rateBundled:'오프라인 복사본', rateUpdating:'업데이트 중…',
+    convertedAt:'적용된 환율',
+    ratePrompt:(from,to)=>`환율\n\n1 ${from}은(는) 몇 ${to}입니까?\n\n기본 환율로 돌아가려면 비워두세요.`,
+    entries:n=>`${n}개 항목`,
+    curChangeWarn:(from,to)=>`통화를 ${from}에서 ${to}(으)로 변경하시겠습니까?\n\n이미 기록된 금액은 액면가를 유지하며 어떤 환율로도 변환되지 않습니다: ${from} 1000은 ${to} 1000이 됩니다。\n\n두 통화가 다른 수의 소수점을 사용하는 경우 금액이 반올림됩니다。\n\n원하지 않는 경우 취소하세요.`,
+    clearConfirm:'모든 데이터를 지우시겠습니까? 이 작업은 실행 취소할 수 없습니다.',
+    dateError:'시작일은 종료일 이전이거나 같아야 합니다.',
+    setRange:'시작하려면 위에서 예산과 날짜 범위를 설정하세요',
+    dateLocale:'ko-KR',
+  },
+  ru: {
+    title:'Календарь Бюджета', subtitle:'Учет ежедневных расходов на продукты с переносом, ежемесячных "прочих" расходов и сбережений',
+    language:'Язык', monthlyBudget:'Месячный бюджет', startDate:'Дата начала', endDate:'Дата окончания',
+    mainCurrency:'Основная валюта', savCurrency:'Валюта сбережений', savLabel:'Сбережения',
+    resetAll:'Сбросить все',
+    sumMonthlyBudget:'Месячный бюджет', sumMonthlyRemaining:'Остаток на месяц',
+    sumSavingsBudget:'💰 Бюджет сбережений', sumTotalBudget:'Общий бюджет',
+    sumGroceryBudget:'Бюджет на продукты', sumGroceriesSpent:'Потрачено на продукты',
+    sumOtherExpenses:'Прочие расходы', sumMonthlySpent:'Потрачено за месяц',
+    daysInRange:'дней', ofBudget:'% от бюджета',
+    baseDaily:'Базовый на день', currentDaily:'Текущий на день',
+    deficit:'Дефицит', onTrack:'В норме', deductedFromBudget:'Вычтено из бюджета',
+    spent:'Потрачено', left:'Остаток',
+    weekdays:['Вс','Пн','Вт','Ср','Чт','Пт','Сб'],
+    months:['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'],
+    avail:'Дост', groc:'Прод', other:'Др', sav:'Сбер', calLeft:'Ост',
+    modalBaseDailyBudget:'Базовый дневной бюджет', modalDeficitFromPrev:'Дефицит за прошлые дни',
+    modalAvailForGroc:'Доступно для продуктов', modalGrocSpent:'Потрачено на продукты',
+    modalRemaining:'Остаток', modalWillBeTaken:'будет вычтено из следующих дней',
+    grocTitle:'🛒 Продукты', grocHint:'переносится на следующие дни при превышении бюджета', noGrocExpenses:'Нет расходов на продукты',
+    otherTitle:'📦 Прочее', otherHint:'вычитается из месячного бюджета, перераспределяется ежедневно', noOtherExpenses:'Нет других расходов',
+    savTitle:'💰 Сбережения', savHint:'вычитается из бюджета сбережений', noSavExpenses:'Нет расходов на сбережения',
+    descPlaceholder:'Описание', defaultGroc:'Продукты', defaultOther:'Прочее', defaultSav:'Сбережения',
+    listTitle:'📋 Расходы за месяц', listEmpty:'Пока нет записанных расходов. Нажмите на день, чтобы добавить.',
+    listEmptyCat:'Нет расходов в этой категории', thDesc:'Описание', thQty:'Кол.', thTotal:'Итого',
+    thTotalRow:'Итого',
+    exportData:'Экспорт', importData:'Импорт', privacyOptions:'Реклама и данные',
+    importBad:'Этот файл не является резервной копией Budget Calendar.',
+    importOk:'Данные восстановлены.',
+    importConfirm:'Заменить ВСЕ текущие данные этой резервной копией? Это действие нельзя отменить.',
+    rateEdit:'задать вручную', rateRefresh:'обновить', rateManual:'ручной курс',
+    rateNone:'нет курса', rateBundled:'офлайн копия', rateUpdating:'обновление…',
+    convertedAt:'Конвертировано по курсу',
+    ratePrompt:(from,to)=>`Обменный курс\n\nСколько ${to} составляет 1 ${from}?\n\nОставьте пустым, чтобы вернуться к базовому курсу.`,
+    entries:n=>{
+      const m10 = n % 10, m100 = n % 100;
+      if (m10 === 1 && m100 !== 11) return `${n} запись`;
+      if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return `${n} записи`;
+      return `${n} записей`;
+    },
+    curChangeWarn:(from,to)=>`Изменить валюту с ${from} на ${to}?\n\nУже записанные суммы сохранят свою номинальную стоимость и НЕ будут конвертированы по курсу: ${from} 1000 станет ${to} 1000.\n\nЕсли две валюты используют разное количество десятичных знаков, суммы будут округлены.\n\nОтмените, если это не то, что вы хотите.`,
+    clearConfirm:'Удалить все данные? Это действие нельзя отменить.',
+    dateError:'Дата начала должна быть раньше или равна дате окончания.',
+    setRange:'Установите бюджет и диапазон дат выше, чтобы начать',
+    dateLocale:'ru-RU',
+  },
+  hi: {
+    title:'बजट कैलेंडर', subtitle:'स्पिलओवर के साथ दैनिक किराने का खर्च, मासिक "अन्य" खर्च और बचत ट्रैक करें',
+    language:'भाषा', monthlyBudget:'मासिक बजट', startDate:'प्रारंभ तिथि', endDate:'अंतिम तिथि',
+    mainCurrency:'मुख्य मुद्रा', savCurrency:'बचत मुद्रा', savLabel:'बचत',
+    resetAll:'सभी रीसेट करें',
+    sumMonthlyBudget:'मासिक बजट', sumMonthlyRemaining:'मासिक शेष',
+    sumSavingsBudget:'💰 बचत बजट', sumTotalBudget:'कुल बजट',
+    sumGroceryBudget:'किराने का बजट', sumGroceriesSpent:'किराने पर खर्च',
+    sumOtherExpenses:'अन्य खर्च', sumMonthlySpent:'मासिक खर्च',
+    daysInRange:'दिनों की संख्या', ofBudget:'बजट का %',
+    baseDaily:'मूल दैनिक', currentDaily:'वर्तमान दैनिक',
+    deficit:'घाटा', onTrack:'सही राह पर', deductedFromBudget:'बजट से काटा गया',
+    spent:'खर्च हुआ', left:'शेष',
+    weekdays:['रवि','सोम','मंगल','बुध','गुरु','शुक्र','शनि'],
+    months:['जनवरी','फरवरी','मार्च','अप्रैल','मई','जून','जुलाई','अगस्त','सितंबर','अक्टूबर','नवंबर','दिसंबर'],
+    avail:'उपलब्ध', groc:'किराना', other:'अन्य', sav:'बचत', calLeft:'शेष',
+    modalBaseDailyBudget:'मूल दैनिक बजट', modalDeficitFromPrev:'पिछले दिनों से घाटा',
+    modalAvailForGroc:'किराने के लिए उपलब्ध', modalGrocSpent:'किराने पर खर्च हुआ',
+    modalRemaining:'शेष', modalWillBeTaken:'अगले दिन(दिनों) से लिया जाएगा',
+    grocTitle:'🛒 किराना', grocHint:'बजट से अधिक होने पर अगले दिन(दिनों) में जुड़ जाएगा', noGrocExpenses:'किराने का कोई खर्च नहीं',
+    otherTitle:'📦 अन्य', otherHint:'मासिक बजट से काटा जाता है, प्रतिदिन पुनर्वितरित होता है', noOtherExpenses:'कोई अन्य खर्च नहीं',
+    savTitle:'💰 बचत', savHint:'बचत बजट से काटा गया', noSavExpenses:'कोई बचत खर्च नहीं',
+    descPlaceholder:'विवरण', defaultGroc:'किराना', defaultOther:'अन्य', defaultSav:'बचत',
+    listTitle:'📋 मासिक खर्च', listEmpty:'अभी तक कोई खर्च दर्ज नहीं किया गया। खर्च जोड़ने के लिए किसी दिन पर क्लिक करें।',
+    listEmptyCat:'इस श्रेणी में कोई खर्च नहीं', thDesc:'विवरण', thQty:'मात्रा', thTotal:'कुल',
+    thTotalRow:'कुल',
+    exportData:'निर्यात', importData:'आयात', privacyOptions:'विज्ञापन गोपनीयता',
+    importBad:'यह फ़ाइल एक मान्य बैकअप नहीं है।',
+    importOk:'डेटा पुनर्स्थापित किया गया।',
+    importConfirm:'क्या सभी वर्तमान डेटा को इस बैकअप से बदलें? इसे पूर्ववत नहीं किया जा सकता।',
+    rateEdit:'मैन्युअल रूप से सेट करें', rateRefresh:'रीफ्रेश', rateManual:'मैन्युअल दर',
+    rateNone:'कोई दर नहीं', rateBundled:'ऑफ़लाइन कॉपी', rateUpdating:'अपडेट हो रहा है…',
+    convertedAt:'पर परिवर्तित दर',
+    ratePrompt:(from,to)=>`विनिमय दर\n\n1 ${from} कितने ${to} है?\n\nडिफ़ॉल्ट दर पर वापस जाने के लिए खाली छोड़ दें।`,
+    entries:n=>`${n} प्रविष्टि${n!==1?'यां':''}`,
+    curChangeWarn:(from,to)=>`मुद्रा ${from} से ${to} में बदलें?\n\nपहले से दर्ज की गई राशियां अपना अंकित मूल्य बनाए रखती हैं और किसी भी विनिमय दर पर परिवर्तित नहीं होती हैं: ${from} 1000, ${to} 1000 हो जाता है।\n\nयदि दोनों मुद्राएं अलग-अलग दशमलव का उपयोग करती हैं, तो राशियों को पूर्णांकित किया जाता है।\n\nयदि आप यह नहीं चाहते तो रद्द करें।`,
+    clearConfirm:'क्या सभी डेटा साफ़ करें? इसे पूर्ववत नहीं किया जा सकता।',
+    dateError:'प्रारंभ तिथि अंतिम तिथि से पहले या उसके समान होनी चाहिए।',
+    setRange:'शुरू करने के लिए ऊपर अपना बजट और तिथि सीमा सेट करें',
+    dateLocale:'hi-IN',
+  },
+  tr: {
+    title:'Bütçe Takvimi', subtitle:'Devreden günlük market harcamalarını, aylık "diğer" harcamaları ve tasarrufları takip et',
+    language:'Dil', monthlyBudget:'Aylık Bütçe', startDate:'Başlangıç Tarihi', endDate:'Bitiş Tarihi',
+    mainCurrency:'Ana Para Birimi', savCurrency:'Tasarruf Para Birimi', savLabel:'Tasarruflar',
+    resetAll:'Tümünü Sıfırla',
+    sumMonthlyBudget:'Aylık Bütçe', sumMonthlyRemaining:'Aylık Kalan',
+    sumSavingsBudget:'💰 Tasarruf Bütçesi', sumTotalBudget:'Toplam Bütçe',
+    sumGroceryBudget:'Market Bütçesi', sumGroceriesSpent:'Markete Harcanan',
+    sumOtherExpenses:'Diğer Harcamalar', sumMonthlySpent:'Aylık Harcanan',
+    daysInRange:'gün', ofBudget:'% bütçe',
+    baseDaily:'Temel günlük', currentDaily:'Mevcut günlük',
+    deficit:'Açık', onTrack:'İyi gidiyor', deductedFromBudget:'Bütçeden düşülen',
+    spent:'Harcanan', left:'Kalan',
+    weekdays:['Paz','Pzt','Sal','Çar','Per','Cum','Cmt'],
+    months:['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'],
+    avail:'Uygun', groc:'Market', other:'Diğer', sav:'Tasarf', calLeft:'Kalan',
+    modalBaseDailyBudget:'Temel günlük bütçe', modalDeficitFromPrev:'Önceki günden(günlerden) kalan açık',
+    modalAvailForGroc:'Market için kullanılabilir', modalGrocSpent:'Markete harcanan',
+    modalRemaining:'Kalan', modalWillBeTaken:'sonraki günden(günlerden) alınacak',
+    grocTitle:'🛒 Market', grocHint:'bütçe aşılırsa sonraki güne(günlere) devreder', noGrocExpenses:'Market harcaması yok',
+    otherTitle:'📦 Diğer', otherHint:'aylık bütçeden düşülür, her gün yeniden dağıtılır', noOtherExpenses:'Diğer harcama yok',
+    savTitle:'💰 Tasarruflar', savHint:'tasarruf bütçesinden düşülen', noSavExpenses:'Tasarruf harcaması yok',
+    descPlaceholder:'Açıklama', defaultGroc:'Market', defaultOther:'Diğer', defaultSav:'Tasarruf',
+    listTitle:'📋 Aylık Harcamalar', listEmpty:'Henüz harcama kaydedilmedi. Eklemek için bir güne tıklayın.',
+    listEmptyCat:'Bu kategoride harcama yok', thDesc:'Açıklama', thQty:'Adet', thTotal:'Toplam',
+    thTotalRow:'Toplam',
+    exportData:'Dışa Aktar', importData:'İçe Aktar', privacyOptions:'Reklam gizliliği',
+    importBad:'Bu dosya geçerli bir yedekleme değil.',
+    importOk:'Veriler geri yüklendi.',
+    importConfirm:'TÜM mevcut verileri bu yedeklemeyle değiştir? Bu işlem geri alınamaz.',
+    rateEdit:'manuel ayarla', rateRefresh:'yenile', rateManual:'manuel kur',
+    rateNone:'kur yok', rateBundled:'çevrimdışı kopya', rateUpdating:'güncelleniyor…',
+    convertedAt:'Şu kurdan çevrildi:',
+    ratePrompt:(from,to)=>`Döviz Kuru\n\n1 ${from} kaç ${to} eder?\n\nVarsayılan kura dönmek için boş bırakın.`,
+    entries:n=>`${n} kayıt`,
+    curChangeWarn:(from,to)=>`Para birimini ${from} yerine ${to} olarak değiştir?\n\nZaten kaydedilmiş tutarlar yüz değerlerini korur ve HİÇBİR döviz kuruyla dönüştürülmez: ${from} 1000, ${to} 1000 olur.\n\nEğer iki para birimi farklı sayıda ondalık hane kullanıyorsa, tutarlar yuvarlanır.\n\nEğer istediğiniz bu değilse iptal edin.`,
+    clearConfirm:'Tüm verileri temizle? Bu işlem geri alınamaz.',
+    dateError:'Başlangıç tarihi bitiş tarihinden önce veya ona eşit olmalıdır.',
+    setRange:'Başlamak için bütçenizi ve tarih aralığınızı yukarıdan ayarlayın',
+    dateLocale:'tr-TR',
+  }
+};
+
+// Phase 2 replaces this with a proper exact-tag -> base-language -> en
+// chain over locales/*.json. For now it just stops being able to throw on
+// an unknown language and falls back to English instead of a raw key.
+function t(key,...args) {
+  const dict = LANG[S.lang] || LANG.en;
+  let val = dict[key];
+  if (val === undefined) val = LANG.en[key];
+  if (typeof val === 'function') return val(...args);
+  return val === undefined ? key : val;
+}
+
+// ═══════════════════════════════════════
+// CURRENCIES
+// ═══════════════════════════════════════
+const CURRENCIES = [
+  {code:'USD',symbol:'$'},{code:'EUR',symbol:'€'},{code:'GBP',symbol:'£'},
+  {code:'UYU',symbol:'$U'},{code:'ARS',symbol:'AR$'},{code:'BRL',symbol:'R$'},
+  {code:'CLP',symbol:'CL$'},{code:'MXN',symbol:'MX$'},{code:'COP',symbol:'CO$'},
+  {code:'PEN',symbol:'S/'},{code:'PYG',symbol:'₲'},{code:'BOB',symbol:'Bs'},
+  {code:'CAD',symbol:'CA$'},{code:'AUD',symbol:'AU$'},{code:'NZD',symbol:'NZ$'},
+  {code:'JPY',symbol:'¥'},{code:'CNY',symbol:'¥'},{code:'KRW',symbol:'₩'},
+  {code:'INR',symbol:'₹'},{code:'CHF',symbol:'CHF'},{code:'SEK',symbol:'kr'},
+  {code:'NOK',symbol:'kr'},{code:'DKK',symbol:'kr'},{code:'PLN',symbol:'zł'},
+  {code:'CZK',symbol:'Kč'},{code:'HUF',symbol:'Ft'},{code:'TRY',symbol:'₺'},
+  {code:'ZAR',symbol:'R'},{code:'ILS',symbol:'₪'},{code:'THB',symbol:'฿'},
+];
+
+function getCurrencySymbol(code) {
+  const c = CURRENCIES.find(c=>c.code===code);
+  return c ? c.symbol : code;
+}
+
+// ═══════════════════════════════════════
+// STATE  (schema 3 — see js/money.js for the invariants)
+//
+// Two ledgers, each internally exact:
+//   account ledger : budgetMinor, expenses.groceries, expenses.other
+//                    -> integer minor units of S.accountCurrency
+//   savings ledger : savingsBudgetMinor, expenses.savings
+//                    -> integer minor units of S.savingsCurrency
+// Nothing stored is ever a converted value. Conversion happens only where
+// the two ledgers are summed for display, and only at format time.
+// ═══════════════════════════════════════
+let S = Money.defaultState();
+let calcCache = null;
+let modalDate = null;
+let migrationReport = null;
+
+// ═══════════════════════════════════════
+// PERSISTENCE
+// ═══════════════════════════════════════
+function save() { Money.saveState(S); }
+
+// ═══════════════════════════════════════
+// RATES — bundled, offline, never fetched.
+//
+// rates.json ships with the app: a base currency, a rate table and an
+// asOf date. No network call means no INTERNET permission and nothing to
+// declare on the Play Data Safety form.
+//
+// A manual per-pair override wins over the bundled table and is persisted
+// in S.rateOverrides under the key "FROM>TO".
+// ═══════════════════════════════════════
+let RATES = null;   // set by loadRates(); null until then
+
+// rates.json, inlined for the web build (the Android build loads it as a file)
+const BUNDLED_RATES = {
+  "base": "USD",
+  "asOf": "2026-09-08",
+  "source": "open.er-api.com, captured once at build time. Bundled offline fallback; the app refreshes this at runtime when it can reach the network.",
+  "rates": {
+    "USD": 1, "EUR": 0.860364, "GBP": 0.738631, "UYU": 40.256269,
+    "ARS": 1511.154, "BRL": 5.126189, "CLP": 933.491386, "MXN": 16.932921,
+    "COP": 3132.334419, "PEN": 3.355232, "PYG": 5992.196781, "BOB": 12.406121,
+    "CAD": 1.381165, "AUD": 1.385323, "NZD": 1.700267, "JPY": 154.414743,
+    "CNY": 6.728426, "KRW": 1345.378849, "INR": 94.544084, "CHF": 0.809244,
+    "SEK": 9.596326, "NOK": 9.269628, "DKK": 6.431278, "PLN": 3.70819,
+    "CZK": 20.813729, "HUF": 312.329965, "TRY": 48.458036, "ZAR": 15.986219,
+    "ILS": 3.013817, "THB": 32.880758
+  }
+};
+
+const RATES_API = 'https://open.er-api.com/v6/latest/USD';
+const RATES_CACHE = 'budgetCalRates_v1';
+const RATES_MAX_AGE_MS = 12 * 60 * 60 * 1000;   // refresh at most twice a day
+
+/**
+ * Three sources, best first:
+ *   1. rates fetched from the network and cached on this device
+ *   2. rates.json bundled in the app
+ *   3. nothing — converted figures render as an em dash, never a guess
+ *
+ * The bundled table is what makes the app work on a plane, on first run
+ * before any successful fetch, and forever if the endpoint disappears.
+ */
+async function loadRates() {
+  // Bundled first, so there is always something to render with.
+  try {
+    const data = BUNDLED_RATES;   // inlined below, no file to fetch
+    if (data && data.rates && data.base) RATES = data;
+  } catch (e) {
+    console.warn('bundled rates.json unavailable:', e);
+  }
+
+  // A cached network copy supersedes the bundle when it is newer.
+  let cached = null;
+  try { cached = JSON.parse(localStorage.getItem(RATES_CACHE) || 'null'); } catch (e) {}
+  if (cached && cached.rates && cached.base &&
+      (!RATES || String(cached.asOf) > String(RATES.asOf))) {
+    RATES = cached;
+  }
+
+  paintRates();
+
+  // Refresh in the background if what we have is stale. Failure is silent
+  // and harmless — we already have usable rates on screen.
+  const age = cached && cached.fetchedAt ? Date.now() - cached.fetchedAt : Infinity;
+  if (age > RATES_MAX_AGE_MS) refreshRates(false);
+}
+
+/** @param {boolean} loud - show progress in the rate line (manual refresh) */
+async function refreshRates(loud) {
+  const info = document.getElementById('rateInfo');
+  if (loud && info) info.textContent = t('rateUpdating');
+  try {
+    const res = await fetch(RATES_API, { cache: 'no-store' });
+    const data = await res.json();
+    if (!data || !data.rates || !data.rates.USD) throw new Error('bad payload');
+    const asOf = (data.time_last_update_utc
+      ? new Date(data.time_last_update_utc)
+      : new Date()).toISOString().slice(0, 10);
+    const fresh = { base: 'USD', asOf: asOf, live: true,
+                    fetchedAt: Date.now(), rates: data.rates };
+    RATES = fresh;
+    try { localStorage.setItem(RATES_CACHE, JSON.stringify(fresh)); } catch (e) {}
+  } catch (e) {
+    console.warn('rate refresh failed, keeping what we have:', e);
+  }
+  paintRates();
+}
+
+function paintRates() {
+  renderRateInfo();
+  syncSavingsPreview('foreign');   // the derived box is blank until rates land
+  fullRender();
+}
+
+/** Units of `to` per 1 unit of `from`, or null if unknown. */
+function rateFor(from, to) {
+  if (from === to) return 1;
+  const ov = S.rateOverrides || {};
+  if (ov[from + '>' + to] > 0) return Number(ov[from + '>' + to]);
+  if (ov[to + '>' + from] > 0) return 1 / Number(ov[to + '>' + from]);
+  if (!RATES) return null;
+  const rf = RATES.rates[from], rt = RATES.rates[to];
+  return (rf > 0 && rt > 0) ? rt / rf : null;
+}
+
+function rateIsManual(from, to) {
+  const ov = S.rateOverrides || {};
+  return ov[from + '>' + to] > 0 || ov[to + '>' + from] > 0;
+}
+
+/** Savings-ledger minor units -> account-ledger minor units, unrounded.
+ *  One expression, no intermediate rounding. null when no rate is known,
+ *  which C() renders as an em dash rather than a wrong number. */
+function savToAcct(minorish) {
+  const from = S.savingsCurrency, to = S.accountCurrency;
+  const r = rateFor(from, to);
+  if (r === null) return null;
+  return minorish * r *
+    Math.pow(10, Money.minorExp(to) - Money.minorExp(from));
+}
+
+/** Short provenance string shown next to every converted figure. */
+function rateStamp() {
+  const from = S.savingsCurrency, to = S.accountCurrency;
+  if (from === to) return '';
+  if (rateIsManual(from, to)) return t('rateManual');
+  if (!RATES || !RATES.asOf) return t('rateNone');
+  // Never present a bundled rate as if it were today's.
+  return RATES.asOf + (RATES.live ? '' : ' · ' + t('rateBundled'));
+}
+
+function renderRateInfo() {
+  const info = document.getElementById('rateInfo');
+  if (!info) return;
+  const sav = document.getElementById('inSavCur')?.value || S.savingsCurrency;
+  const acct = document.getElementById('inMainCur')?.value || S.accountCurrency;
+  if (sav === acct) { info.textContent = ''; return; }
+  const r = rateFor(sav, acct);
+  const shown = r === null ? '—' : (Math.round(r * 10000) / 10000);
+  info.innerHTML = `1 ${sav} = ${shown} ${acct} · ${esc(rateStamp())} ` +
+                   `<a onclick="refreshRates(true)">${esc(t('rateRefresh'))}</a> · ` +
+                   `<a onclick="editRate()">${esc(t('rateEdit'))}</a>`;
+}
+
+/** Manual per-pair override, persisted. Empty input clears it. */
+function editRate() {
+  const sav = document.getElementById('inSavCur')?.value || S.savingsCurrency;
+  const acct = document.getElementById('inMainCur')?.value || S.accountCurrency;
+  const cur = rateFor(sav, acct);
+  const raw = prompt(t('ratePrompt', sav, acct), cur === null ? '' : String(cur));
+  if (raw === null) return;
+  if (!S.rateOverrides) S.rateOverrides = {};
+  const key = sav + '>' + acct;
+  const v = parseFloat(String(raw).replace(',', '.'));
+  if (String(raw).trim() === '') { delete S.rateOverrides[key]; }
+  else if (v > 0) { S.rateOverrides[key] = v; }
+  else { return; }
+  delete S.rateOverrides[acct + '>' + sav];
+  save(); renderRateInfo(); syncSavingsPreview('foreign'); fullRender();
+}
+
+// ═══════════════════════════════════════
+// TRANSLATION & LABELS
+// ═══════════════════════════════════════
+function updateLabels() {
+  document.querySelectorAll('[data-t]').forEach(el => {
+    const val = t(el.dataset.t);
+    if (typeof val === 'string') el.textContent = val;
+  });
+  document.documentElement.lang = S.lang;
+  document.title = t('title');
+  updateSavingsLabels();
+}
+
+function updateSavingsLabels() {
+  const savCode = document.getElementById('inSavCur')?.value || S.savingsCurrency;
+  const mainCode = document.getElementById('inMainCur')?.value || S.accountCurrency;
+  const lbl1 = document.getElementById('lblSavForeign');
+  const lbl2 = document.getElementById('lblSavMain');
+  if (lbl1) lbl1.textContent = t('savLabel') + ' (' + savCode + ')';
+  if (lbl2) lbl2.textContent = t('savLabel') + ' (' + mainCode + ')';
+}
+
+function changeLang(lang) {
+  S.lang = lang;
+  save();
+  updateLabels();
+  fullRender();
+}
+
+function onCurrencyChange() {
+  const mainSel = document.getElementById('inMainCur');
+  const savSel = document.getElementById('inSavCur');
+  const mainCur = mainSel.value, savCur = savSel.value;
+
+  // Flush whatever is typed in the money boxes FIRST, read in the currency
+  // they were rendered in, so a pending edit is not lost or misread.
+  S.budgetMinor =
+    Money.parseDecimalToMinor(document.getElementById('inBudget').value, S.accountCurrency) || 0;
+  S.savingsBudgetMinor =
+    Money.parseDecimalToMinor(document.getElementById('inSavForeign').value, S.savingsCurrency) || 0;
+
+  if (mainCur !== S.accountCurrency) {
+    if (hasLedgerData('account') && !confirm(t('curChangeWarn', S.accountCurrency, mainCur))) {
+      mainSel.value = S.accountCurrency;
+      updateSavingsLabels(); renderRateInfo(); return;
+    }
+    redenominateLedger('account', S.accountCurrency, mainCur);
+    S.accountCurrency = mainCur;
+    S.displayCurrency = mainCur;
+  }
+  if (savCur !== S.savingsCurrency) {
+    if (hasLedgerData('savings') && !confirm(t('curChangeWarn', S.savingsCurrency, savCur))) {
+      savSel.value = S.savingsCurrency;
+      updateSavingsLabels(); renderRateInfo(); return;
+    }
+    redenominateLedger('savings', S.savingsCurrency, savCur);
+    S.savingsCurrency = savCur;
+  }
+
+  save();
+  updateSavingsLabels();
+  populateInputs();          // safe here: no field is mid-edit
+  renderRateInfo();
+  refreshRates(false);
+  fullRender();
+}
+
+// ═══════════════════════════════════════
+// EXCHANGE RATE
+// ═══════════════════════════════════════
+// ═══════════════════════════════════════
+// SAVINGS BUDGET ENTRY
+//
+// The savings budget is stored ONCE, in the savings currency. The second
+// box is an entry aid: typing in either updates the other, and only the
+// savings-currency figure is ever persisted. This is what removes the
+// stored-converted-value bug — previously the account-currency figure was
+// saved, so it silently went stale whenever the rate moved.
+// ═══════════════════════════════════════
+function syncSavingsPreview(sourceField) {
+  const fEl = document.getElementById('inSavForeign');
+  const mEl = document.getElementById('inSavMain');
+  if (!fEl || !mEl) return;
+  const savCode = document.getElementById('inSavCur')?.value || S.savingsCurrency;
+  const acctCode = document.getElementById('inMainCur')?.value || S.accountCurrency;
+
+  if (savCode === acctCode) {
+    if (sourceField === 'foreign') mEl.value = fEl.value;
+    else fEl.value = mEl.value;
+    return;
+  }
+  const conv = (minor, from, to) => {
+    const r = rateFor(from, to);
+    if (r === null || minor === null) return '';
+    return Money.toInputString(
+      Math.round(minor * r * Math.pow(10, Money.minorExp(to) - Money.minorExp(from))), to);
+  };
+  if (sourceField === 'foreign') {
+    mEl.value = conv(Money.parseDecimalToMinor(fEl.value, savCode), savCode, acctCode);
+  } else {
+    fEl.value = conv(Money.parseDecimalToMinor(mEl.value, acctCode), acctCode, savCode);
+  }
+}
+
+// ═══════════════════════════════════════
+// DATE UTILITIES
+// ═══════════════════════════════════════
+function pad(n) { return String(n).padStart(2,'0'); }
+function fmtDate(y,m,d) { return `${y}-${pad(m+1)}-${pad(d)}`; }
+function parseD(s) { const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); }
+function addDays(s,n) { const d=parseD(s); d.setDate(d.getDate()+n); return fmtDate(d.getFullYear(),d.getMonth(),d.getDate()); }
+function daysInMonth(y,m) { return new Date(y,m+1,0).getDate(); }
+function todayStr() { const d=new Date(); return fmtDate(d.getFullYear(),d.getMonth(),d.getDate()); }
+function isInRange(ds) { return ds >= S.startDate && ds <= S.endDate; }
+function monthName(m) { return t('months')[m]; }
+function weekdayOf(y,m,d) { return new Date(y,m,d).getDay(); }
+
+// ═══════════════════════════════════════
+// FIRST DAY OF WEEK
+//
+// The weekday arrays above are all Sunday-first, but most of the world is
+// not: German, French, Italian, Russian and Turkish calendars start on
+// Monday. Rendering them Sunday-first is wrong in a way those users notice
+// immediately.
+//
+// Intl.Locale.getWeekInfo() is the correct source but only exists in newer
+// WebViews (Chrome 130+), so the static table is the fallback, keyed by the
+// app's own language list. Values are 0 = Sunday … 6 = Saturday.
+// ═══════════════════════════════════════
+const FIRST_DOW = {
+  en:0, es:1, pt:0, fr:1, de:1, it:1,
+  zh:1, ja:0, ko:0, ru:1, hi:0, tr:1   // zh is Monday-first in CLDR
+};
+
+function firstDayOfWeek() {
+  const tag = S.lang || 'en';
+  try {
+    const loc = new Intl.Locale(tag);
+    if (typeof loc.getWeekInfo === 'function') {
+      const f = loc.getWeekInfo().firstDay;   // 1 = Monday … 7 = Sunday
+      if (f >= 1 && f <= 7) return f % 7;     // -> 0 = Sunday … 6 = Saturday
+    }
+  } catch (e) { /* older WebView: fall through to the table */ }
+  const base = tag.split('-')[0];
+  return (base in FIRST_DOW) ? FIRST_DOW[base] : 1;
+}
+
+function getActiveDates() {
+  if (!S.startDate || !S.endDate || S.startDate > S.endDate) return [];
+  const dates = [];
+  let cur = S.startDate;
+  while (cur <= S.endDate) { dates.push(cur); cur = addDays(cur,1); }
+  return dates;
+}
+
+// Read path. Deliberately does NOT create a record: calculate() calls
+// this for every date in the range, and the old version therefore wrote an
+// empty {groceries,other,savings} object for every day of the month into
+// localStorage. That bloat would ride along in the Android auto-backup and
+// in every JSON export, so reads now return a shared frozen blank instead.
+const EMPTY_DAY = Object.freeze({
+  groceries: Object.freeze([]), other: Object.freeze([]), savings: Object.freeze([])
+});
+function getExpenses(ds) {
+  const e = S.expenses[ds];
+  if (!e) return EMPTY_DAY;
+  if (!e.savings) e.savings = [];
+  return e;
+}
+
+/** Write path: creates the day record on demand. */
+function ensureExpenses(ds) {
+  let e = S.expenses[ds];
+  if (!e) { e = S.expenses[ds] = { groceries: [], other: [], savings: [] }; }
+  if (!e.savings) e.savings = [];
+  return e;
+}
+
+// ═══════════════════════════════════════
+// CURRENCY FORMAT
+//
+// Input is minor units — integer when it came from storage, fractional
+// when it came out of a division (daily budgets, spillover). Rounding
+// happens HERE and nowhere earlier.
+//
+// `cur` defaults to the account ledger; savings-ledger figures pass
+// S.savingsCurrency explicitly. Phase 3 swaps the body of these two
+// functions for Intl.NumberFormat; every call site stays as it is.
+// ═══════════════════════════════════════
+function C(minorish, cur) {
+  const code = cur || S.accountCurrency;
+  if (minorish === null || minorish === undefined) return '—';
+  return Money.legacyFormat(minorish, code, getCurrencySymbol(code));
+}
+function CS(minorish, cur) {
+  const code = cur || S.accountCurrency;
+  if (minorish === null || minorish === undefined) return '—';
+  return Money.legacyFormatSigned(minorish, code, getCurrencySymbol(code));
+}
+/** Savings-ledger shorthands, so call sites read unambiguously. */
+function CV(minorish)  { return C(minorish, S.savingsCurrency); }
+function CVS(minorish) { return CS(minorish, S.savingsCurrency); }
+
+/** Compact calendar format: strips all-zero fractional part (.00 → empty)
+ *  so amounts like $U45000.00 display as $U45000. Keeps non-zero decimals. */
+function compactFmt(str) {
+  return str.replace(/\.0+$/, '');
+}
+function CC(minorish, cur) { return compactFmt(C(minorish, cur)); }
+function CCS(minorish, cur) { return compactFmt(CS(minorish, cur)); }
+function CCV(minorish)  { return compactFmt(CV(minorish)); }
+
+/** Shrink value spans inside .day-inf that overflow their parent cell.
+ *  Called once after the calendar grid is in the DOM. */
+function fitDayText() {
+  document.querySelectorAll('.day-inf span').forEach(el => {
+    const cell = el.closest('.day');
+    if (!cell) return;
+    // Reset to stylesheet size first
+    el.style.fontSize = '';
+    const max = cell.clientWidth - 16; // account for cell padding
+    if (el.scrollWidth > max && max > 0) {
+      const ratio = max / el.scrollWidth;
+      const base = parseFloat(getComputedStyle(el).fontSize);
+      el.style.fontSize = Math.max(base * ratio, 6) + 'px';
+    }
+  });
+}
+
+// ═══════════════════════════════════════
+// CALCULATIONS
+// ═══════════════════════════════════════
+function calculate() {
+  const dates = getActiveDates();
+  const N = dates.length;
+  const result = { days:{}, totalOther:0, totalGroceries:0, totalSavings:0, effectiveBudget:0, baseDailyBudget:0, adjustedDailyBudget:0, totalSpent:0, remaining:0, numDays:N, savingsRemaining:0 };
+
+  if (N === 0 || S.budgetMinor <= 0) { calcCache = result; return result; }
+
+  // Account ledger (minor units of S.accountCurrency)
+  let totalOther = 0;
+  // Savings ledger (minor units of S.savingsCurrency) — kept separate,
+  // never added to the account ledger except at the display boundary.
+  let totalSavings = 0;
+  for (const ds of dates) {
+    const exp = getExpenses(ds);
+    totalOther += exp.other.reduce((s,e) => s + e.m, 0);
+    totalSavings += exp.savings.reduce((s,e) => s + e.m, 0);
+  }
+  result.totalOther = totalOther;
+  result.totalSavings = totalSavings;
+  result.savingsRemaining = S.savingsBudgetMinor - totalSavings;
+  result.effectiveBudget = S.budgetMinor - totalOther;
+  // Fractional minor units from here on. Not rounded until C()/CS().
+  result.baseDailyBudget = result.effectiveBudget / N;
+
+  const today = todayStr();
+  const pastDays = dates.filter(d => d < today);
+  const remainingDays = dates.filter(d => d >= today);
+
+  let deficit = 0, totalSurplus = 0, totalGroceries = 0;
+
+  for (const ds of pastDays) {
+    const exp = getExpenses(ds);
+    const groceryTotal = exp.groceries.reduce((s,e) => s + e.m, 0);
+    const otherTotal = exp.other.reduce((s,e) => s + e.m, 0);
+    const savingsTotal = exp.savings.reduce((s,e) => s + e.m, 0);
+    totalGroceries += groceryTotal;
+    const available = result.baseDailyBudget - deficit;
+    const remaining = available - groceryTotal;
+    if (remaining > 0) totalSurplus += remaining;
+    let status;
+    if (groceryTotal===0 && deficit===0) status='none';
+    else if (remaining > result.baseDailyBudget*0.5) status='good';
+    else if (remaining > 0) status='good';
+    else if (remaining === 0) status='warn';
+    else status='bad';
+    const usageRatio = result.baseDailyBudget > 0 ? Math.min(groceryTotal/Math.max(available,result.baseDailyBudget),2) : 0;
+    result.days[ds] = { baseDailyBudget:result.baseDailyBudget, available, groceryTotal, otherTotal, savingsTotal, remaining, deficit:remaining<0?-remaining:0, incomingDeficit:deficit, status, usageRatio, isPast:true };
+    deficit = remaining < 0 ? -remaining : 0;
+  }
+
+  const adjDaily = remainingDays.length > 0 ? result.baseDailyBudget + totalSurplus/remainingDays.length : result.baseDailyBudget;
+  result.adjustedDailyBudget = adjDaily;
+
+  for (const ds of remainingDays) {
+    const exp = getExpenses(ds);
+    const groceryTotal = exp.groceries.reduce((s,e) => s + e.m, 0);
+    const otherTotal = exp.other.reduce((s,e) => s + e.m, 0);
+    const savingsTotal = exp.savings.reduce((s,e) => s + e.m, 0);
+    totalGroceries += groceryTotal;
+    const available = adjDaily - deficit;
+    const remaining = available - groceryTotal;
+    let status;
+    if (groceryTotal===0 && deficit===0) status='none';
+    else if (remaining > adjDaily*0.5) status='good';
+    else if (remaining > 0) status='warn';
+    else if (remaining === 0) status='warn';
+    else status='bad';
+    const usageRatio = adjDaily > 0 ? Math.min(groceryTotal/Math.max(available,adjDaily),2) : 0;
+    result.days[ds] = { baseDailyBudget:adjDaily, available, groceryTotal, otherTotal, savingsTotal, remaining, deficit:remaining<0?-remaining:0, incomingDeficit:deficit, status, usageRatio, isPast:false };
+    deficit = remaining < 0 ? -remaining : 0;
+  }
+
+  result.totalGroceries = totalGroceries;
+  result.totalSpent = result.totalGroceries + totalOther;
+  result.remaining = S.budgetMinor - result.totalSpent;
+  result.trailingDeficit = deficit;
+  calcCache = result;
+  return result;
+}
+
+// ═══════════════════════════════════════
+// RENDER SUMMARY
+// ═══════════════════════════════════════
+function renderSummary(r) {
+  const el = document.getElementById('summary');
+  if (r.numDays === 0) { el.innerHTML = ''; return; }
+
+  const spentPct = S.budgetMinor>0 ? Math.min((r.totalSpent/S.budgetMinor)*100,100) : 0;
+  const spentColor = spentPct>90?'var(--bad)':spentPct>70?'var(--warn)':'var(--ok)';
+  const savPct = S.savingsBudgetMinor>0 ? Math.min((r.totalSavings/S.savingsBudgetMinor)*100,100) : 0;
+  const savColor = savPct>90?'var(--bad)':savPct>70?'var(--warn)':'var(--sav)';
+  // The ONLY place the two ledgers meet. Converted for display, rounded
+  // once inside C()/CS(), never written back. Null when no rate is known,
+  // which C() renders as an em dash rather than a wrong number.
+  const savBudgetInAcct = savToAcct(S.savingsBudgetMinor);
+  const savSpentInAcct  = savToAcct(r.totalSavings);
+  const haveRate = savBudgetInAcct !== null && savSpentInAcct !== null;
+  const totalBudget   = haveRate ? S.budgetMinor + savBudgetInAcct : null;
+  const totalSpentAll = haveRate ? r.totalSpent + savSpentInAcct : null;
+  const totalRemaining= haveRate ? totalBudget - totalSpentAll : null;
+
+  el.innerHTML = `
+    <!-- ROW 1 -->
+    <div class="s-card">
+      <div class="lbl">${t('sumMonthlyBudget')}</div>
+      <div class="val">${C(S.budgetMinor)}</div>
+      <div class="sub">${r.numDays} ${t('daysInRange')}</div>
+    </div>
+    <div class="s-card">
+      <div class="lbl">${t('sumMonthlyRemaining')}</div>
+      <div class="val" style="color:${r.remaining<0?'var(--bad)':r.remaining<S.budgetMinor*.1?'var(--warn)':'var(--ok)'}">${CS(r.remaining)}</div>
+      <div class="sub">${S.budgetMinor>0?Math.round((r.remaining/S.budgetMinor)*100):0}${t('ofBudget')}</div>
+    </div>
+    <div class="s-card" style="border-left:3px solid var(--sav)">
+      <div class="lbl">${t('sumSavingsBudget')}</div>
+      <div class="val" style="color:var(--sav)">${CV(S.savingsBudgetMinor)}</div>
+      <div class="sub">${t('spent')}: ${CV(r.totalSavings)} · ${t('left')}: ${CVS(r.savingsRemaining)}</div>
+      <div class="progress"><div class="progress-fill" style="width:${savPct}%;background:${savColor}"></div></div>
+    </div>
+    <div class="s-card highlight">
+      <div class="lbl">${t('sumTotalBudget')} (${S.accountCurrency})</div>
+      <div class="val">${C(totalBudget)}</div>
+      <div class="sub">${t('spent')}: ${C(totalSpentAll)} · ${t('left')}: <strong>${CS(totalRemaining)}</strong></div>
+      ${S.savingsCurrency!==S.accountCurrency ? `<div class="sub" style="font-size:.68rem">${t('convertedAt')} ${esc(rateStamp())}</div>` : ''}
+    </div>
+    <!-- ROW 2 -->
+    <div class="s-card">
+      <div class="lbl">${t('sumGroceryBudget')}</div>
+      <div class="val" style="color:${r.effectiveBudget<0?'var(--bad)':'var(--txt)'}">${CS(r.effectiveBudget)}</div>
+      <div class="sub">${t('baseDaily')}: ${CS(r.baseDailyBudget)}${r.adjustedDailyBudget!==r.baseDailyBudget ? '<br>'+t('currentDaily')+': <strong>'+CS(r.adjustedDailyBudget)+'</strong>' : ''}</div>
+    </div>
+    <div class="s-card">
+      <div class="lbl">${t('sumGroceriesSpent')}</div>
+      <div class="val" style="color:${r.totalGroceries>0?'var(--ok)':'var(--txt)'}">${C(r.totalGroceries)}</div>
+      <div class="sub">${r.trailingDeficit>0 ? '<span style="color:var(--bad)">'+t('deficit')+': '+C(r.trailingDeficit)+'</span>' : t('onTrack')}</div>
+    </div>
+    <div class="s-card">
+      <div class="lbl">${t('sumOtherExpenses')}</div>
+      <div class="val" style="color:${r.totalOther>0?'var(--pri)':'var(--txt)'}">${C(r.totalOther)}</div>
+      <div class="sub">${t('deductedFromBudget')}</div>
+    </div>
+    <div class="s-card">
+      <div class="lbl">${t('sumMonthlySpent')}</div>
+      <div class="val">${C(r.totalSpent)}</div>
+      <div class="progress"><div class="progress-fill" style="width:${spentPct}%;background:${spentColor}"></div></div>
+    </div>
+  `;
+}
+
+// ═══════════════════════════════════════
+// RENDER CALENDAR
+// ═══════════════════════════════════════
+function renderCalendar(r) {
+  const wrap = document.getElementById('calendarWrap');
+  if (!S.startDate || !S.endDate) {
+    wrap.innerHTML = `<div class="empty-msg"><div class="icon">📅</div><h3>${t('setRange')}</h3></div>`;
+    return;
+  }
+  const y=S.viewYear, m=S.viewMonth;
+  const dim=daysInMonth(y,m), firstDow=weekdayOf(y,m,1), today=todayStr();
+  let html = `<div class="cal-head"><div class="cal-nav"><button onclick="navMonth(-1)">‹</button></div><h2>${monthName(m)} ${y}</h2><div class="cal-nav"><button onclick="navMonth(1)">›</button></div></div><div class="cal-grid">`;
+
+  const fdw = firstDayOfWeek();
+  const wd = t('weekdays');                       // always Sunday-first
+  for (let i=0; i<7; i++) html += `<div class="wk-hdr">${wd[(fdw+i)%7]}</div>`;
+  const lead = (firstDow - fdw + 7) % 7;          // blanks before day 1
+  for (let i=0; i<lead; i++) html += '<div class="day empty"></div>';
+
+  for (let d=1; d<=dim; d++) {
+    const ds=fmtDate(y,m,d), active=isInRange(ds), isToday=ds===today, dayData=r.days[ds];
+    let cls='day'; if(!active) cls+=' inactive'; else cls+=' active'; if(isToday) cls+=' today';
+    let info='';
+    if (active && dayData) {
+      if (dayData.groceryTotal>0||dayData.incomingDeficit>0) {
+        if (dayData.remaining<0) cls+=' st-over'; else if (dayData.remaining<dayData.baseDailyBudget*0.3) cls+=' st-warn'; else cls+=' st-good';
+      }
+      if (dayData.otherTotal>0) cls+=' has-other';
+      if (dayData.savingsTotal>0) cls+=' has-sav';
+      info = `<div class="day-inf">`;
+      info += `${t('avail')}:<br><span class="${dayData.available<0?'d':'s'}">${CCS(dayData.available)}</span><br>`;
+      if (dayData.groceryTotal>0) info += `${t('groc')}:<br><span class="g">${CC(dayData.groceryTotal)}</span><br>`;
+      if (dayData.otherTotal>0) info += `${t('other')}:<br><span class="o">${CC(dayData.otherTotal)}</span><br>`;
+      if (dayData.savingsTotal>0) info += `${t('sav')}:<br><span class="sv">${CCV(dayData.savingsTotal)}</span><br>`;
+      if (dayData.groceryTotal>0||dayData.incomingDeficit>0) info += `${t('calLeft')}:<br><span class="${dayData.remaining<0?'d':'s'}">${CCS(dayData.remaining)}</span>`;
+      info += `</div>`;
+      const pct=Math.min(dayData.usageRatio*100,100), bColor=dayData.remaining<0?'var(--bad)':dayData.usageRatio>.7?'var(--warn)':'var(--ok)';
+      if (dayData.groceryTotal>0||dayData.incomingDeficit>0) info += `<div class="day-bar"><div class="day-bar-fill" style="width:${pct}%;background:${bColor}"></div></div>`;
+    } else if (active) {
+      info = `<div class="day-inf">${t('avail')}:<br><span class="s">${CCS(r.baseDailyBudget)}</span></div>`;
+    }
+    const click = active ? `onclick="openModal('${ds}')"` : '';
+    html += `<div class="${cls}" ${click}><div class="day-num">${d}</div>${info}</div>`;
+  }
+  html += '</div>';
+  wrap.innerHTML = html;
+  fitDayText();
+}
+
+// ═══════════════════════════════════════
+// MODAL
+// ═══════════════════════════════════════
+function openModal(ds) { modalDate=ds; renderModal(); document.getElementById('overlay').classList.add('open'); }
+function closeModal() { document.getElementById('overlay').classList.remove('open'); modalDate=null; }
+
+function renderModal() {
+  if (!modalDate) return;
+  const ds=modalDate, r=calcCache, exp=getExpenses(ds);
+  const dd = r.days[ds] || { baseDailyBudget:r.baseDailyBudget, available:r.baseDailyBudget, groceryTotal:0, otherTotal:0, savingsTotal:0, remaining:r.baseDailyBudget, deficit:0, incomingDeficit:0 };
+  const dateStr = parseD(ds).toLocaleDateString(t('dateLocale'), { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+
+  let html = `
+    <div class="m-hdr"><h3>${dateStr}</h3><button class="m-close" onclick="closeModal()">✕</button></div>
+    <div class="m-body">
+      <div class="binfo">
+        <div class="binfo-row"><span>${t('modalBaseDailyBudget')}</span><span>${CS(dd.baseDailyBudget)}</span></div>
+        ${dd.incomingDeficit>0 ? `<div class="binfo-row" style="color:var(--bad)"><span>${t('modalDeficitFromPrev')}</span><span>−${C(dd.incomingDeficit)}</span></div>` : ''}
+        <div class="binfo-row" style="font-weight:600"><span>${t('modalAvailForGroc')}</span><span style="color:${dd.available<0?'var(--bad)':'var(--ok)'}">${CS(dd.available)}</span></div>
+        <div class="binfo-row"><span>${t('modalGrocSpent')}</span><span style="color:var(--ok)">${C(dd.groceryTotal)}</span></div>
+        <div class="binfo-row total"><span>${t('modalRemaining')}</span><span style="color:${dd.remaining<0?'var(--bad)':'var(--ok)'}">${CS(dd.remaining)}</span></div>
+        ${dd.remaining<0 ? `<div class="binfo-row" style="color:var(--bad);font-size:.75rem;margin-top:4px"><span>⚠ ${C(-dd.remaining)} ${t('modalWillBeTaken')}</span></div>` : ''}
+      </div>
+
+      <!-- Groceries -->
+      <div class="m-sec">
+        <h4>${t('grocTitle')} <span style="font-weight:400;color:var(--muted);font-size:.75rem">— ${t('grocHint')}</span></h4>
+        <ul class="exp-list">`;
+
+  if (exp.groceries.length===0) html += `<li class="exp-item" style="justify-content:center;color:var(--muted)">${t('noGrocExpenses')}</li>`;
+  else exp.groceries.forEach((e,i) => { html += `<li class="exp-item"><span class="nm">${esc(e.d||t('defaultGroc'))}</span><span class="am" style="color:var(--ok)">${C(e.m)}</span><button class="del" onclick="removeExpense('${ds}','groceries',${i})">✕</button></li>`; });
+
+  html += `</ul><div class="add-form"><input type="text" id="grocDesc" placeholder="${t('descPlaceholder')}" onkeydown="if(event.key==='Enter'){event.preventDefault();addExpense('${ds}','groceries')}"><input type="number" id="grocAmt" placeholder="0.00" min="0" step="0.01" onkeydown="if(event.key==='Enter'){event.preventDefault();addExpense('${ds}','groceries')}"><button class="btn btn-pri btn-sm" onclick="addExpense('${ds}','groceries')">+</button></div></div>
+
+      <!-- Other -->
+      <div class="m-sec">
+        <h4>${t('otherTitle')} <span style="font-weight:400;color:var(--muted);font-size:.75rem">— ${t('otherHint')}</span></h4>
+        <ul class="exp-list">`;
+
+  if (exp.other.length===0) html += `<li class="exp-item" style="justify-content:center;color:var(--muted)">${t('noOtherExpenses')}</li>`;
+  else exp.other.forEach((e,i) => { html += `<li class="exp-item"><span class="nm">${esc(e.d||t('defaultOther'))}</span><span class="am" style="color:var(--pri)">${C(e.m)}</span><button class="del" onclick="removeExpense('${ds}','other',${i})">✕</button></li>`; });
+
+  html += `</ul><div class="add-form"><input type="text" id="otherDesc" placeholder="${t('descPlaceholder')}" onkeydown="if(event.key==='Enter'){event.preventDefault();addExpense('${ds}','other')}"><input type="number" id="otherAmt" placeholder="0.00" min="0" step="0.01" onkeydown="if(event.key==='Enter'){event.preventDefault();addExpense('${ds}','other')}"><button class="btn btn-pri btn-sm" onclick="addExpense('${ds}','other')">+</button></div></div>
+
+      <!-- Savings -->
+      <div class="m-sec">
+        <h4>${t('savTitle')} <span style="font-weight:400;color:var(--muted);font-size:.75rem">— ${t('savHint')} (${CVS(r.savingsRemaining)} ${t('left').toLowerCase()})</span></h4>
+        <ul class="exp-list">`;
+
+  if (exp.savings.length===0) html += `<li class="exp-item" style="justify-content:center;color:var(--muted)">${t('noSavExpenses')}</li>`;
+  else exp.savings.forEach((e,i) => { html += `<li class="exp-item"><span class="nm">${esc(e.d||t('defaultSav'))}</span><span class="am" style="color:var(--sav)">${CV(e.m)}</span><button class="del" onclick="removeExpense('${ds}','savings',${i})">✕</button></li>`; });
+
+  html += `</ul><div class="add-form"><input type="text" id="savDesc" placeholder="${t('descPlaceholder')}" onkeydown="if(event.key==='Enter'){event.preventDefault();addExpense('${ds}','savings')}"><input type="number" id="savAmt" placeholder="0.00" min="0" step="0.01" onkeydown="if(event.key==='Enter'){event.preventDefault();addExpense('${ds}','savings')}"><button class="btn btn-pri btn-sm" onclick="addExpense('${ds}','savings')">+</button></div></div>
+    </div>`;
+
+  document.getElementById('modal').innerHTML = html;
+}
+
+function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+// ═══════════════════════════════════════
+// ACTIONS
+// ═══════════════════════════════════════
+function addExpense(ds, cat) {
+  const idMap = { groceries:['grocDesc','grocAmt'], other:['otherDesc','otherAmt'], savings:['savDesc','savAmt'] };
+  const [descId,amtId] = idMap[cat];
+  const descEl=document.getElementById(descId), amtEl=document.getElementById(amtId);
+  // Savings entries belong to the savings ledger and are stored in the
+  // savings currency; everything else is the account ledger.
+  const cur = (cat==='savings') ? S.savingsCurrency : S.accountCurrency;
+  const minor = Money.parseDecimalToMinor(amtEl.value, cur);
+  if (minor === null || minor <= 0) { amtEl.focus(); return; }
+  const defKeys = { groceries:'defaultGroc', other:'defaultOther', savings:'defaultSav' };
+  const desc = descEl.value.trim() || t(defKeys[cat]);
+  ensureExpenses(ds)[cat].push({ d:desc, m:minor });
+  save(); fullRender(); renderModal();
+  descEl.value=''; amtEl.value=''; descEl.focus();
+}
+
+function removeExpense(ds, cat, idx) {
+  const exp=ensureExpenses(ds); exp[cat].splice(idx,1);
+  if (exp.groceries.length===0 && exp.other.length===0 && exp.savings.length===0) delete S.expenses[ds];
+  save(); fullRender(); renderModal();
+}
+
+// ═══════════════════════════════════════
+// AUTO-APPLY
+//
+// There is no Apply button. Every settings field commits on its own:
+// typing is debounced, blur and date pickers commit immediately, and a
+// currency change commits through onCurrencyChange() because it may need
+// to re-denominate a ledger first.
+//
+// commitSettings() deliberately does NOT call populateInputs() — that
+// would reformat the box under the user's cursor mid-edit.
+// ═══════════════════════════════════════
+let autoApplyTimer = null;
+
+/** @param {number} [ms] 0 to commit now; omit for the typing debounce. */
+function scheduleApply(ms) {
+  clearTimeout(autoApplyTimer);
+  autoApplyTimer = setTimeout(commitSettings, ms === 0 ? 0 : 450);
+}
+
+function commitSettings() {
+  const startEl = document.getElementById('inStart');
+  const endEl = document.getElementById('inEnd');
+  const errEl = document.getElementById('dateErr');
+  const start = startEl.value, end = endEl.value;
+
+  // An inverted range is shown inline instead of in a dialog, and simply
+  // is not committed — the previous range stays live until it is fixed.
+  const bad = !!(start && end && start > end);
+  endEl.classList.toggle('invalid', bad);
+  if (errEl) errEl.textContent = bad ? t('dateError') : '';
+  if (!bad) {
+    const rangeChanged = (start !== S.startDate);
+    S.startDate = start;
+    S.endDate = end;
+    if (start && rangeChanged) {
+      const d = parseD(start); S.viewYear = d.getFullYear(); S.viewMonth = d.getMonth();
+    }
+  }
+
+  S.budgetMinor =
+    Money.parseDecimalToMinor(document.getElementById('inBudget').value, S.accountCurrency) || 0;
+  // Only the savings-currency box is stored; inSavMain is a derived preview.
+  S.savingsBudgetMinor =
+    Money.parseDecimalToMinor(document.getElementById('inSavForeign').value, S.savingsCurrency) || 0;
+
+  save();
+  fullRender();
+}
+
+/**
+ * Re-denominate one ledger: keep every FACE value, restate it in the new
+ * currency's minor units.
+ *
+ * This is the one operation allowed to rewrite stored amounts, and only
+ * behind an explicit confirmation, because it is a deliberate change of
+ * denomination rather than a display conversion. It does not consult a
+ * rate - $U1,234.56 becomes JPY 1,235, not its market value.
+ *
+ * When both currencies share an exponent (the common case: almost
+ * everything is 2) the factor is 1 and nothing is written at all.
+ */
+function redenominateLedger(which, fromCur, toCur) {
+  const f = Math.pow(10, Money.minorExp(toCur) - Money.minorExp(fromCur));
+  if (f === 1) return 0;
+  let n = 0;
+  const scale = v => { n++; return Math.round(v * f); };
+  const rescale = rows => rows.map(r => ({ d: r.d, m: scale(r.m) }));
+  if (which === 'account') {
+    S.budgetMinor = scale(S.budgetMinor);
+    for (const ds in S.expenses) {
+      const e = S.expenses[ds];
+      e.groceries = rescale(e.groceries);
+      e.other = rescale(e.other);
+    }
+  } else {
+    S.savingsBudgetMinor = scale(S.savingsBudgetMinor);
+    for (const ds in S.expenses) {
+      S.expenses[ds].savings = rescale(S.expenses[ds].savings);
+    }
+  }
+  return n;
+}
+
+/** Does a ledger already hold any amount? Used to decide whether a
+ *  currency change needs confirming. */
+function hasLedgerData(which) {
+  if (which === 'account') {
+    if (S.budgetMinor > 0) return true;
+    for (const ds in S.expenses) {
+      const e = S.expenses[ds];
+      if ((e.groceries && e.groceries.length) || (e.other && e.other.length)) return true;
+    }
+    return false;
+  }
+  if (S.savingsBudgetMinor > 0) return true;
+  for (const ds in S.expenses) {
+    if (S.expenses[ds].savings && S.expenses[ds].savings.length) return true;
+  }
+  return false;
+}
+
+function clearAll() {
+  if (!confirm(t('clearConfirm'))) return;
+  const now=new Date();
+  const keep = { lang:S.lang, accountCurrency:S.accountCurrency,
+                 savingsCurrency:S.savingsCurrency, displayCurrency:S.displayCurrency,
+                 legacyExchangeRate:S.legacyExchangeRate||0 };
+  S = Object.assign(Money.defaultState(), keep,
+                    { viewYear:now.getFullYear(), viewMonth:now.getMonth() });
+  save();
+  populateInputs(); fullRender();
+}
+
+function navMonth(dir) {
+  S.viewMonth+=dir;
+  if (S.viewMonth<0){S.viewMonth=11;S.viewYear--;}
+  if (S.viewMonth>11){S.viewMonth=0;S.viewYear++;}
+  save(); renderCalendar(calculate());
+}
+
+// ═══════════════════════════════════════
+// MONTHLY EXPENSE LIST
+// ═══════════════════════════════════════
+let recurCollapsed = false;
+function toggleRecurring() {
+  recurCollapsed=!recurCollapsed;
+  const body=document.querySelector('.recur-body'), chev=document.querySelector('.recur-hdr .chevron');
+  if(body) body.classList.toggle('collapsed',recurCollapsed);
+  if(chev) chev.classList.toggle('open',!recurCollapsed);
+}
+
+function buildCategoryTable(items, catTotal, cur) {
+  if (items.length===0) return `<div class="exp-cat-empty">${t('listEmptyCat')}</div>`;
+  const groups={};
+  for (const e of items) { const k=e.desc.toLowerCase(); if(!groups[k]) groups[k]={desc:e.desc,count:0,total:0}; groups[k].count++; groups[k].total+=e.amount; }
+  const rows=Object.values(groups).sort((a,b)=>b.total-a.total);
+  let html=`<table class="recur-table"><thead><tr><th>${t('thDesc')}</th><th>${t('thQty')}</th><th>${t('thTotal')}</th></tr></thead><tbody>`;
+  for (const r of rows) html += `<tr><td>${esc(r.desc)}</td><td style="text-align:center">${r.count>1?r.count+'×':''}</td><td><strong>${C(r.total,cur)}</strong></td></tr>`;
+  html += `</tbody><tfoot><tr style="background:var(--bg);font-weight:700"><td>${t('thTotalRow')}</td><td></td><td style="text-align:right">${C(catTotal,cur)}</td></tr></tfoot></table>`;
+  return html;
+}
+
+function renderRecurring() {
+  const wrap=document.getElementById('recurringWrap');
+  const dates=getActiveDates();
+  if (dates.length===0) { wrap.innerHTML=''; return; }
+  const groceries=[], other=[], savings=[];
+  for (const ds of dates) {
+    const exp=S.expenses[ds]; if(!exp) continue;
+    for (const e of (exp.groceries||[])) groceries.push({desc:e.d||t('defaultGroc'),amount:e.m});
+    for (const e of (exp.other||[])) other.push({desc:e.d||t('defaultOther'),amount:e.m});
+    for (const e of (exp.savings||[])) savings.push({desc:e.d||t('defaultSav'),amount:e.m});
+  }
+  const grocTotal=groceries.reduce((s,e)=>s+e.amount,0), otherTotal=other.reduce((s,e)=>s+e.amount,0), savTotal=savings.reduce((s,e)=>s+e.amount,0);
+  // Cross-ledger again: savings are in the savings currency.
+  const savInAcct = savToAcct(savTotal);
+  const grandTotal = savInAcct===null ? null : grocTotal+otherTotal+savInAcct;
+  const totalCount = groceries.length+other.length+savings.length;
+
+  let html = `<div class="recur-panel"><div class="recur-hdr" onclick="toggleRecurring()"><h3>${t('listTitle')} <span class="badge">${totalCount}</span></h3><span class="chevron ${recurCollapsed?'':'open'}">▼</span></div><div class="recur-body ${recurCollapsed?'collapsed':''}">`;
+
+  if (totalCount===0) {
+    html += `<div class="recur-empty">${t('listEmpty')}</div>`;
+  } else {
+    html += `<div class="exp-cat-hdr"><span class="cat-badge groc">${t('grocTitle')} — ${t('entries',groceries.length)}</span></div>`;
+    html += buildCategoryTable(groceries, grocTotal, S.accountCurrency);
+    html += `<div class="exp-cat-hdr"><span class="cat-badge other">${t('otherTitle')} — ${t('entries',other.length)}</span></div>`;
+    html += buildCategoryTable(other, otherTotal, S.accountCurrency);
+    html += `<div class="exp-cat-hdr"><span class="cat-badge sav">${t('savTitle')} — ${t('entries',savings.length)}</span></div>`;
+    html += buildCategoryTable(savings, savTotal, S.savingsCurrency);
+  }
+  html += `<div class="recur-foot">`;
+  if (grocTotal>0) html += `<span>🛒 ${C(grocTotal)}</span>`;
+  if (otherTotal>0) html += `<span>📦 ${C(otherTotal)}</span>`;
+  if (savTotal>0) html += `<span>💰 ${CV(savTotal)}</span>`;
+  html += `<span>${t('thTotalRow')}: ${C(grandTotal)}</span></div></div></div>`;
+  wrap.innerHTML = html;
+}
+
+// ═══════════════════════════════════════
+// RENDER ORCHESTRATION
+// ═══════════════════════════════════════
+function fullRender() { const r=calculate(); renderSummary(r); renderCalendar(r); renderRecurring(); }
+
+function populateCurrencyDropdowns() {
+  const mainSel=document.getElementById('inMainCur'), savSel=document.getElementById('inSavCur');
+  mainSel.innerHTML=''; savSel.innerHTML='';
+  CURRENCIES.forEach(c => {
+    mainSel.add(new Option(`${c.code} (${c.symbol})`, c.code));
+    savSel.add(new Option(`${c.code} (${c.symbol})`, c.code));
+  });
+  mainSel.value = S.accountCurrency;
+  savSel.value = S.savingsCurrency;
+}
+
+function populateInputs() {
+  document.getElementById('inLang').value = S.lang||'en';
+  document.getElementById('inBudget').value = Money.toInputString(S.budgetMinor, S.accountCurrency);
+  document.getElementById('inStart').value = S.startDate||'';
+  document.getElementById('inEnd').value = S.endDate||'';
+  document.getElementById('inMainCur').value = S.accountCurrency;
+  document.getElementById('inSavCur').value = S.savingsCurrency;
+  // Stored value goes in the savings-currency box; the other is derived.
+  document.getElementById('inSavForeign').value = Money.toInputString(S.savingsBudgetMinor, S.savingsCurrency);
+  updateSavingsLabels();
+  syncSavingsPreview('foreign');
+  renderRateInfo();
+}
+
+// ═══════════════════════════════════════
+// EXPORT / IMPORT
+//
+// On Android the native shell handles the file picker through a
+// WebMessageListener bound to this origin only (no addJavascriptInterface).
+// In a plain browser it falls back to a download and a file input, so the
+// same code is testable on the desktop.
+// ═══════════════════════════════════════
+function backupBlob() {
+  return JSON.stringify({
+    app: 'budget-calendar', schema: 3,
+    exportedAt: new Date().toISOString(),
+    state: S
+  }, null, 2);
+}
+
+function backupName() {
+  const d = new Date();
+  return 'budget-calendar-' + d.getFullYear() + pad(d.getMonth()+1) + pad(d.getDate()) + '.json';
+}
+
+function exportData() {
+  const json = backupBlob();
+  if (window.AndroidBridge) {
+    AndroidBridge.postMessage(JSON.stringify({ action:'export', name:backupName(), payload:json }));
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([json], { type:'application/json' }));
+  a.download = backupName();
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+}
+
+function importData() {
+  if (window.AndroidBridge) {
+    AndroidBridge.postMessage(JSON.stringify({ action:'import' }));
+    return;
+  }
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'application/json,.json';
+  inp.onchange = () => {
+    const f = inp.files && inp.files[0];
+    if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => applyImport(String(rd.result));
+    rd.readAsText(f);
+  };
+  inp.click();
+}
+
+/** Called by the shell (and by the browser fallback) with the file text. */
+function applyImport(text) {
+  let obj = null;
+  try { obj = JSON.parse(text); } catch (e) { alert(t('importBad')); return; }
+  const st = obj && obj.state ? obj.state : obj;
+  if (!st || typeof st !== 'object' || st.schema !== 3 || typeof st.expenses !== 'object') {
+    alert(t('importBad')); return;
+  }
+  if (!confirm(t('importConfirm'))) return;
+  S = Money.normalise(st);
+  save();
+  populateCurrencyDropdowns(); populateInputs(); updateLabels();
+  renderRateInfo(); fullRender();
+  alert(t('importOk'));
+}
+window.applyImport = applyImport;
+
+// ═══════════════════════════════════════
+// AD PRIVACY
+//
+// The banner itself is a native view below this page — there is no ad markup
+// here and no ad script is ever loaded into the WebView. All this does is
+// give the shell a place to put the button that reopens Google's consent
+// form, which Google requires for users whose region lets them change their
+// mind later.
+// ═══════════════════════════════════════
+function openPrivacyOptions() {
+  if (window.AndroidBridge) {
+    AndroidBridge.postMessage(JSON.stringify({ action:'privacyOptions' }));
+  }
+}
+
+/** Called by the shell once it knows whether the form applies to this user. */
+window.setPrivacyOptionsAvailable = function (available) {
+  const b = document.getElementById('btnPrivacy');
+  if (b) b.style.display = available ? '' : 'none';
+};
+
+// ═══════════════════════════════════════
+// KEYBOARD
+// ═══════════════════════════════════════
+document.addEventListener('keydown', e => { if (e.key==='Escape') closeModal(); });
+
+// ═══════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════
+(function init() {
+  // v2 -> v3 migration happens here, once, non-destructively. The raw v2
+  // blob is copied to budgetCalState_v2_backup before anything is written
+  // and is never overwritten. See js/money.js.
+  const loaded = Money.loadState();
+  S = loaded.state;
+  migrationReport = loaded.report;
+  if (loaded.migrated && migrationReport) {
+    console.info('[budget] migrated v2 -> v3:', migrationReport.notes.join(' | '));
+  }
+  const now = new Date();
+  if (!S.lang) S.lang = 'en';
+  if (!S.viewYear) { S.viewYear=now.getFullYear(); S.viewMonth=now.getMonth(); }
+  if (!S.startDate) S.startDate = fmtDate(now.getFullYear(),now.getMonth(),1);
+  if (!S.endDate) S.endDate = fmtDate(now.getFullYear(),now.getMonth(),daysInMonth(now.getFullYear(),now.getMonth()));
+  // Persist on first run so a v3 blob always exists for Android's
+  // auto-backup to pick up, rather than only appearing after the first
+  // edit. (v2 only wrote on user action.)
+  save();
+  populateCurrencyDropdowns();
+  populateInputs();
+  updateLabels();
+  renderRateInfo();
+  fullRender();
+  loadRates();
+})();
+</script>
+<footer id="webBuildFoot">
+  <p><strong>Budget Calendar</strong> &mdash; web version. This page runs entirely in your browser; everything you
+  enter is stored in this browser only and is never sent anywhere.</p>
+  <p><a href="./">Budget Calendar on litrenders.com</a> &middot; <a href="privacy.html">Privacy policy</a>
+  &middot; <a href="../../index.html">LITrenders</a></p>
+</footer>
+<style>
+#webBuildFoot{max-width:760px;margin:28px auto 0;padding:22px 20px 34px;border-top:1px solid #e3e3e1;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;font-size:.82rem;
+  line-height:1.6;color:#6d6d6a;text-align:center}
+#webBuildFoot p{margin:0 0 6px}
+#webBuildFoot a{color:#0d0d0d;text-underline-offset:3px}
+</style>
+</body>
+</html>

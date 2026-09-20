@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Budget Calendar — try it in your browser — LITrenders</title>
+<meta name="description" content="Run Budget Calendar in your browser. The same interface that ships inside the Android app, with nothing to install and every number kept on your own machine.">
+<link rel="canonical" href="https://litrenders.com/apps/budget-calendar/try.html">
+<meta property="og:title" content="Budget Calendar — try it in your browser — LITrenders">
+<meta property="og:description" content="Run Budget Calendar in your browser. The same interface that ships inside the Android app, with nothing to install.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://litrenders.com/apps/budget-calendar/try.html">
+<meta property="og:image" content="https://litrenders.com/assets/img/icon-512.png">
+<meta name="twitter:card" content="summary">
+<meta name="theme-color" content="#0d0d0d">
+<link rel="icon" href="../../assets/img/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" href="../../assets/img/favicon-64.png">
+<link rel="apple-touch-icon" href="../../assets/img/apple-touch-icon.png">
+<link rel="preload" as="font" type="font/woff2" href="../../assets/fonts/inter-latin-wght-normal.woff2" crossorigin>
+<link rel="preload" as="font" type="font/woff2" href="../../assets/fonts/archivo-black-latin-400-normal.woff2" crossorigin>
+<link rel="stylesheet" href="../../assets/css/site.css">
+<style>
+  /* The only page-specific CSS on the site: the frame the app runs inside. */
+  .stage { background: var(--ink); padding-block: clamp(32px, 5vw, 64px); }
+  /* The app's own layout is phone-first, so the frame is held to a phone column. */
+  .stage-inner { display: grid; grid-template-columns: minmax(300px, 430px) 1fr; gap: clamp(28px, 4vw, 64px); align-items: start; }
+  .device {
+    position: relative; background: #000; border: 1px solid #2b2b2b; padding: 10px;
+    box-shadow: 0 30px 70px rgba(0,0,0,.45);
+  }
+  .device iframe { display: block; width: 100%; height: min(78vh, 780px); min-height: 560px; border: 0; background: #f1f5f9; }
+  .device-bar {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 0 4px 10px; color: var(--muted-inv);
+    font-size: .68rem; text-transform: uppercase; letter-spacing: .18em;
+  }
+  .device-bar a { color: var(--paper); text-underline-offset: 3px; }
+  .stage-side h3 { font-size: .95rem; font-weight: 600; color: var(--paper); margin: 0 0 10px; }
+  .stage-side p { color: #d6d6d3; font-size: .92rem; line-height: 1.65; margin: 0 0 22px; max-width: 52ch; }
+  .stage-side li { max-width: 52ch; }
+  .stage-side ul { list-style: none; margin: 0 0 22px; padding: 0; }
+  .stage-side li { color: #d6d6d3; font-size: .9rem; line-height: 1.6; padding: 11px 0; border-top: 1px solid #2b2b2b; }
+  .stage-side li strong { color: var(--paper); font-weight: 600; }
+  @media (max-width: 900px) {
+    .stage-inner { grid-template-columns: 1fr; }
+    .device iframe { height: 72vh; min-height: 520px; }
+  }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav">
+  <div class="nav-inner">
+    <nav class="nav-links" id="nav-links" aria-label="Primary">
+      <a href="../../apps/" aria-current="page">Apps</a>
+      <a href="../../index.html#studio">Studio</a>
+      <a href="../../index.html#contact">Contact</a>
+    </nav>
+    <a class="nav-mark" href="../../index.html" aria-label="LITrenders — home">
+      <img src="../../assets/img/logo-mark.png" alt="LITrenders" width="30" height="34">
+    </a>
+    <div class="nav-end">
+      <a href="mailto:litrenders@gmail.com">litrenders@gmail.com</a>
+    </div>
+    <button class="nav-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="nav-links"><span></span></button>
+  </div>
+</header>
+<main id="main">
+
+<section class="app-hero">
+  <div class="container">
+    <p class="crumbs" style="color:var(--muted-inv)"><a href="../" style="color:inherit">Apps</a> &nbsp;/&nbsp; <a href="./" style="color:inherit">Budget Calendar</a> &nbsp;/&nbsp; Try it</p>
+    <div class="app-hero-grid">
+      <div>
+        <h1 class="display h2">Try it in your browser</h1>
+        <p class="lede">Budget Calendar is a web interface wrapped in a native Android shell. This is that interface, running here &mdash; the same code that ships inside the app, dressed in the studio's colours, with nothing to install and no account to make.</p>
+        <div class="btn-row mt-lg">
+          <a class="btn btn--onDark btn--sm" href="app.html">Open full screen</a>
+          <a class="btn btn--ghost btn--sm" href="./" style="color:var(--paper);border-color:rgba(255,255,255,.4)">About the app</a>
+        </div>
+      </div>
+      <div><svg class="app-tile" viewBox="0 0 400 300" role="img" aria-label="Budget Calendar">
+  <rect width="400" height="300" fill="#0d0d0d"/>
+  <g fill="#ffffff">
+    <rect x="70" y="60" width="260" height="6"/>
+    <g opacity=".28">
+      <rect x="70" y="90" width="30" height="30"/><rect x="116" y="90" width="30" height="30"/><rect x="162" y="90" width="30" height="30"/>
+      <rect x="208" y="90" width="30" height="30"/><rect x="254" y="90" width="30" height="30"/><rect x="300" y="90" width="30" height="30"/>
+      <rect x="70" y="136" width="30" height="30"/><rect x="116" y="136" width="30" height="30"/><rect x="208" y="136" width="30" height="30"/>
+      <rect x="254" y="136" width="30" height="30"/><rect x="70" y="182" width="30" height="30"/><rect x="162" y="182" width="30" height="30"/>
+      <rect x="208" y="182" width="30" height="30"/><rect x="300" y="182" width="30" height="30"/>
+    </g>
+    <rect x="162" y="136" width="30" height="30"/><rect x="300" y="136" width="30" height="30"/>
+    <rect x="116" y="182" width="30" height="30"/><rect x="254" y="182" width="30" height="30"/>
+    <rect x="70" y="238" width="120" height="6" opacity=".5"/><rect x="70" y="254" width="72" height="6" opacity=".3"/>
+  </g>
+</svg></div>
+    </div>
+  </div>
+</section>
+
+<section class="stage">
+  <div class="container">
+    <div class="stage-inner">
+      <div>
+        <div class="device-bar">
+          <span>Budget Calendar &mdash; live</span>
+          <a href="app.html" target="_blank" rel="noopener">Open in a new tab &rarr;</a>
+        </div>
+        <div class="device">
+          <iframe src="app.html" title="Budget Calendar, running in your browser" loading="lazy"></iframe>
+        </div>
+      </div>
+      <aside class="stage-side">
+        <h3>What you are using</h3>
+        <p>The real thing, not a mockup or a video. Set a budget and a date range, then put expenses on the days they
+        happen and watch the daily allowance absorb them.</p>
+        <ul>
+          <li><strong>Your numbers stay here.</strong> Entries are saved in this browser's own storage. Nothing is sent to
+          LITrenders &mdash; there is no server to send it to.</li>
+          <li><strong>Nothing to install.</strong> No account, no sign-up, no email address.</li>
+          <li><strong>Export whenever.</strong> The export button writes a JSON file to your downloads, and the same file
+          imports back into the Android app.</li>
+          <li><strong>No ad here.</strong> The Android build carries one banner at the bottom; this page has none.</li>
+        </ul>
+        <p class="muted" style="color:var(--muted-inv);font-size:.82rem">Clearing your browser data clears the budget with
+        it. Export first if you want to keep it.</p>
+      </aside>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <p class="kicker">How this page exists</p>
+    <h2 class="display h3 tagline">One interface, two shells.</h2>
+    <p class="lede mt-lg">Budget Calendar's interface is a single HTML file with no framework and no build step. On Android
+    it runs inside a native shell that adds the system file picker, backup handling and the ad banner. On this page the same
+    file runs in your browser, and the parts that need Android quietly stand down.</p>
+    <ul class="feature-list mt-lg">
+      <li><div><strong>Same arithmetic</strong><br><span class="muted">Money is held as whole minor units and rounded once, at the point it is displayed &mdash; identical here and on the phone.</span></div></li>
+      <li><div><strong>Same currencies and languages</strong><br><span class="muted">Twelve languages and a bundled exchange-rate table, refreshed from a public rate service when a connection is available.</span></div></li>
+      <li><div><strong>Different storage</strong><br><span class="muted">The phone keeps your data in the app's private storage; this page keeps it in the browser. Neither copy ever leaves your device.</span></div></li>
+      <li><div><strong>Different colours</strong><br><span class="muted">On the phone the app wears its own blue. Here it takes the studio's ink and paper, so the page reads as one piece. A build script applies the theme, so the two never drift apart.</span></div></li>
+    </ul>
+    <ul class="facts">
+      <li><span>Runs on</span><span>Any modern browser, phone or desktop</span></li>
+      <li><span>Network</span><span>Only to refresh exchange rates &mdash; everything else works offline</span></li>
+      <li><span>Android app</span><span>In development &mdash; not yet on Google Play</span></li>
+    </ul>
+  </div>
+</section>
+
+<section class="section section--tint">
+  <div class="container">
+    <p class="kicker">Documentation</p>
+    <h2 class="display h3">Policies &amp; support</h2>
+    <div class="doc-links mt-lg">
+      <a href="privacy.html"><strong>Privacy policy</strong><small>What the app collects, what it doesn't, and who else is involved.</small></a>
+      <a href="terms.html"><strong>Terms of use</strong><small>The agreement that covers installing and using Budget Calendar.</small></a>
+      <a href="support.html"><strong>Support</strong><small>Report a bug, ask a question, or request deletion of your data.</small></a>
+    </div>
+  </div>
+</section>
+</main>
+<footer class="footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div>
+        <img class="wordmark" src="../../assets/img/logo-wordmark-inv.png" alt="LITrenders" width="190" height="61">
+        <p>An independent development studio. Android apps, 3D visualization and design, made end to end.</p>
+      </div>
+      <div>
+        <h4>Apps</h4>
+        <ul>
+          <li><a href="../../apps/torchwake/">Torchwake</a></li>
+          <li><a href="../../apps/iondrive/">IonDrive</a></li>
+          <li><a href="../../apps/budget-calendar/">Budget Calendar</a></li>
+          <li><a href="../../apps/">All apps &amp; docs</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Studio</h4>
+        <ul>
+          <li><a href="../../index.html#studio">About</a></li>
+          <li><a href="mailto:litrenders@gmail.com">litrenders@gmail.com</a></li>
+          <li><a href="../../legal/privacy.html">Website privacy</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-base">
+      <span>&copy; <span data-year>2026</span> LITrenders. All rights reserved.</span>
+      <span>litrenders.com</span>
+    </div>
+  </div>
+</footer>
+<script src="../../assets/js/site.js" defer></script>
+</body>
+</html>
