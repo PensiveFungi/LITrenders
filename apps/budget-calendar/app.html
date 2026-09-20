@@ -219,6 +219,26 @@ header p{opacity:.8;font-size:.82rem;margin-top:3px}
   .theme-btn{width:34px;height:34px}
 }
 </style>
+
+<!-- Google AdSense.
+     The account marker is a plain meta tag: it makes no request and is what
+     AdSense reads to verify the site. The loader itself is injected only when
+     this page is the top-level document. Inside the info page's own iframe
+     (apps/budget-calendar/index.html) Auto ads do not serve, and the rest of
+     litrenders.com deliberately carries no advertising at all. -->
+<meta name="google-adsense-account" content="ca-pub-5091828152191443">
+<script>
+(function () {
+  var framed = true;
+  try { framed = window.self !== window.top; } catch (e) { framed = true; }
+  if (framed) return;
+  var s = document.createElement('script');
+  s.async = true;
+  s.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5091828152191443';
+  s.crossOrigin = 'anonymous';
+  document.head.appendChild(s);
+})();
+</script>
 </head>
 <body>
 
@@ -2449,8 +2469,10 @@ if (window.matchMedia) {
 })();
 </script>
 <footer id="webBuildFoot">
-  <p><strong>Budget Calendar</strong> &mdash; web version. This page runs entirely in your browser; everything you
-  enter is stored in this browser only and is never sent anywhere.</p>
+  <p><strong>Budget Calendar</strong> &mdash; web version. Your budget and expenses are stored in this browser only
+  and are never sent anywhere. This page does show advertising supplied by Google AdSense, which sets its own
+  cookies; it cannot read anything you enter here. The
+  <a href="privacy.html#web-version">privacy policy</a> says exactly what that involves.</p>
   <p><a href="./">Budget Calendar on litrenders.com</a> &middot; <a href="privacy.html">Privacy policy</a>
   &middot; <a href="../../index.html">LITrenders</a></p>
 </footer>
