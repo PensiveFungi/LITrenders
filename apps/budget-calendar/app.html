@@ -12,28 +12,54 @@
 <meta property="og:url" content="https://litrenders.com/apps/budget-calendar/app.html">
 <meta property="og:image" content="https://litrenders.com/assets/img/icon-512.png">
 <meta name="twitter:card" content="summary">
-<meta name="theme-color" content="#2563eb">
+<meta name="theme-color" content="#2563eb" id="themeColor">
+<script>
+/* Resolve the theme before first paint so there is no light flash. */
+(function(){try{var t=localStorage.getItem("bc_theme");
+if(t!=="dark"&&t!=="light"){t=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";}
+document.documentElement.setAttribute("data-theme",t);}catch(e){document.documentElement.setAttribute("data-theme","light");}})();
+</script>
 <link rel="icon" href="../../assets/img/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" href="../../assets/img/favicon-64.png">
 <link rel="apple-touch-icon" href="../../assets/img/apple-touch-icon.png">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --pri:#2563eb;--pri-l:#dbeafe;
+:root,:root[data-theme="light"]{
+  color-scheme:light;
+  --pri:#2563eb;--pri-d:#1d4ed8;--pri-l:#dbeafe;
   --ok:#16a34a;--ok-l:#dcfce7;
   --warn:#d97706;--warn-l:#fef3c7;
-  --bad:#dc2626;--bad-l:#fee2e2;
+  --bad:#dc2626;--bad-d:#b91c1c;--bad-l:#fee2e2;
   --sav:#7c3aed;--sav-l:#ede9fe;
   --bg:#f1f5f9;--card:#fff;--txt:#1e293b;--muted:#64748b;--border:#e2e8f0;
-  --r:8px;--sh:0 1px 3px rgba(0,0,0,.1);
+  --r:8px;--sh:0 1px 3px rgba(0,0,0,.1);--ovl:rgba(0,0,0,.45);
+}
+/* Dark mode. The accent stays blue — the app keeps its own identity, which is
+   deliberately not the LITrenders black and white of the site around it.
+   data-theme is set by the boot script in <head>, so only one block is needed. */
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --pri:#3b82f6;--pri-d:#2563eb;--pri-l:#1e3a5f;
+  --ok:#4ade80;--ok-l:#14361f;
+  --warn:#fbbf24;--warn-l:#3c2a08;
+  --bad:#f87171;--bad-d:#dc2626;--bad-l:#411d1d;
+  --sav:#a78bfa;--sav-l:#2e2352;
+  --bg:#0f172a;--card:#1e293b;--txt:#e2e8f0;--muted:#94a3b8;--border:#334155;
+  --sh:0 1px 3px rgba(0,0,0,.5);--ovl:rgba(0,0,0,.65);
 }
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--txt);line-height:1.5;overflow-x:hidden}
-header{background:linear-gradient(135deg,var(--pri),#1d4ed8);color:#fff;box-shadow:0 2px 8px rgba(37,99,235,.3);
+header{background:linear-gradient(135deg,var(--pri),var(--pri-d));color:#fff;box-shadow:0 2px 8px rgba(37,99,235,.3);
   /* Edge-to-edge is enforced from API 35. Content would otherwise slide
      under the status bar. Zero effect where the insets are 0. */
   padding:calc(18px + env(safe-area-inset-top)) calc(32px + env(safe-area-inset-right)) 18px calc(32px + env(safe-area-inset-left))}
 header h1{font-size:1.4rem;font-weight:700;display:flex;align-items:center;gap:10px}
 header p{opacity:.8;font-size:.82rem;margin-top:3px}
+.hdr-row{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.theme-btn{flex:none;width:38px;height:38px;border:1px solid rgba(255,255,255,.35);border-radius:8px;
+  background:rgba(255,255,255,.12);color:#fff;font-size:1rem;line-height:1;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:background .2s,border-color .2s}
+.theme-btn:hover{background:rgba(255,255,255,.22);border-color:rgba(255,255,255,.6)}
+.theme-btn:focus-visible{outline:2px solid #fff;outline-offset:2px}
 .container{max-width:1200px;margin:0 auto;
   padding:24px calc(24px + env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) calc(24px + env(safe-area-inset-left))}
 
@@ -41,7 +67,7 @@ header p{opacity:.8;font-size:.82rem;margin-top:3px}
 .settings{background:var(--card);border-radius:var(--r);padding:18px 24px;box-shadow:var(--sh);display:flex;gap:18px;align-items:flex-end;flex-wrap:wrap;margin-bottom:18px}
 .field{display:flex;flex-direction:column;gap:5px}
 .field label{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
-.field input,.field select{padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:.88rem;outline:none;transition:border-color .2s}
+.field input,.field select{padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:.88rem;outline:none;transition:border-color .2s;background:var(--card);color:var(--txt)}
 .field input:focus,.field select:focus{border-color:var(--pri)}
 .field input[type=number]{width:135px}.field input[type=date]{width:160px}
 .field select{width:145px}
@@ -58,8 +84,8 @@ header p{opacity:.8;font-size:.82rem;margin-top:3px}
 .rate-info a{color:var(--pri);cursor:pointer;text-decoration:underline}
 
 .btn{padding:8px 18px;border:none;border-radius:6px;font-size:.85rem;font-weight:500;cursor:pointer;transition:all .2s}
-.btn-pri{background:var(--pri);color:#fff}.btn-pri:hover{background:#1d4ed8}
-.btn-bad{background:var(--bad);color:#fff}.btn-bad:hover{background:#b91c1c}
+.btn-pri{background:var(--pri);color:#fff}.btn-pri:hover{background:var(--pri-d)}
+.btn-bad{background:var(--bad);color:#fff}.btn-bad:hover{background:var(--bad-d)}
 .btn-sm{padding:4px 10px;font-size:.75rem}
 .btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}.btn-ghost:hover{background:var(--bg);color:var(--txt)}
 
@@ -103,13 +129,13 @@ header p{opacity:.8;font-size:.82rem;margin-top:3px}
 .day-inf .sv{color:var(--sav);font-weight:600}
 .day-inf .d{color:var(--bad);font-weight:600}
 .day-inf .s{color:var(--ok);font-weight:600}
-.day-bar{height:3px;background:#e2e8f0;border-radius:2px;margin-top:5px;overflow:hidden}
+.day-bar{height:3px;background:var(--border);border-radius:2px;margin-top:5px;overflow:hidden}
 .day-bar-fill{height:100%;border-radius:2px;transition:width .3s}
 .has-other::after{content:'●';position:absolute;top:6px;right:8px;color:var(--pri);font-size:.5rem}
 .has-sav::before{content:'●';position:absolute;top:6px;right:18px;color:var(--sav);font-size:.5rem}
 
 /* Modal */
-.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;justify-content:center;align-items:center;padding:20px}
+.overlay{display:none;position:fixed;inset:0;background:var(--ovl);z-index:1000;justify-content:center;align-items:center;padding:20px}
 .overlay.open{display:flex}
 .modal{background:var(--card);border-radius:12px;width:100%;max-width:500px;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)}
 .m-hdr{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
@@ -132,7 +158,7 @@ header p{opacity:.8;font-size:.82rem;margin-top:3px}
 .exp-item .del:hover{background:var(--bad-l)}
 
 .add-form{display:flex;gap:6px}
-.add-form input{padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:.82rem;outline:none}
+.add-form input{padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:.82rem;outline:none;background:var(--card);color:var(--txt)}
 .add-form input:focus{border-color:var(--pri)}
 .add-form input[type=text]{flex:1;min-width:0}
 .add-form input[type=number]{width:95px}
@@ -187,8 +213,14 @@ header p{opacity:.8;font-size:.82rem;margin-top:3px}
 <body>
 
 <header>
-  <h1>📅 <span data-t="title">Budget Calendar</span></h1>
-  <p data-t="subtitle">Track daily grocery expenses with spillover, monthly "other" expenses &amp; savings</p>
+  <div class="hdr-row">
+    <div>
+      <h1>📅 <span data-t="title">Budget Calendar</span></h1>
+      <p data-t="subtitle">Track daily grocery expenses with spillover, monthly "other" expenses &amp; savings</p>
+    </div>
+    <button type="button" id="themeBtn" class="theme-btn" onclick="toggleTheme()"
+            aria-label="Toggle dark mode" title="Toggle dark mode" aria-pressed="false">🌙</button>
+  </div>
 </header>
 
 <div class="container">
@@ -2355,6 +2387,34 @@ document.addEventListener('keydown', e => { if (e.key==='Escape') closeModal(); 
   loadRates();
 })();
 </script>
+<script>
+/* Theme toggle. Kept in its own localStorage key rather than the settings
+   blob, so it never rides along in the Android auto-backup payload. */
+function applyTheme(t){
+  document.documentElement.setAttribute('data-theme', t);
+  var b = document.getElementById('themeBtn');
+  if (b) { b.textContent = t === 'dark' ? '☀️' : '🌙'; b.setAttribute('aria-pressed', t === 'dark'); }
+  var m = document.getElementById('themeColor');
+  if (m) m.setAttribute('content', t === 'dark' ? '#1e293b' : '#2563eb');
+}
+function toggleTheme(){
+  var t = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  try { localStorage.setItem('bc_theme', t); } catch (e) {}
+  applyTheme(t);
+}
+applyTheme(document.documentElement.getAttribute('data-theme') || 'light');
+/* Follow the system only while the user has not picked a side themselves. */
+if (window.matchMedia) {
+  var mq = window.matchMedia('(prefers-color-scheme: dark)');
+  var onScheme = function(e){
+    var saved = null;
+    try { saved = localStorage.getItem('bc_theme'); } catch (err) {}
+    if (saved !== 'dark' && saved !== 'light') applyTheme(e.matches ? 'dark' : 'light');
+  };
+  if (mq.addEventListener) mq.addEventListener('change', onScheme);
+  else if (mq.addListener) mq.addListener(onScheme);
+}
+</script>
 <footer id="webBuildFoot">
   <p><strong>Budget Calendar</strong> &mdash; web version. This page runs entirely in your browser; everything you
   enter is stored in this browser only and is never sent anywhere.</p>
@@ -2362,11 +2422,11 @@ document.addEventListener('keydown', e => { if (e.key==='Escape') closeModal(); 
   &middot; <a href="../../index.html">LITrenders</a></p>
 </footer>
 <style>
-#webBuildFoot{max-width:760px;margin:28px auto 0;padding:22px 20px 34px;border-top:1px solid #e3e3e1;
+#webBuildFoot{max-width:760px;margin:28px auto 0;padding:22px 20px 34px;border-top:1px solid var(--border);
   font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;font-size:.82rem;
-  line-height:1.6;color:#6d6d6a;text-align:center}
+  line-height:1.6;color:var(--muted);text-align:center}
 #webBuildFoot p{margin:0 0 6px}
-#webBuildFoot a{color:#0d0d0d;text-underline-offset:3px}
+#webBuildFoot a{color:var(--pri);text-underline-offset:3px}
 </style>
 </body>
 </html>
