@@ -92,6 +92,15 @@ header p{opacity:.8;font-size:.82rem;margin-top:3px}
 .btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}.btn-ghost:hover{background:var(--bg);color:var(--txt)}
 
 /* Summary */
+/* AdSense slot, between the settings block and the summary cards. Carded like
+   the rest of the app so it does not look broken, but always under an explicit
+   ADVERTISEMENT label so it can never be mistaken for the app's own figures.
+   min-height reserves the banner height to stop the summary jumping on load;
+   the whole block is removed again if AdSense reports the slot unfilled. */
+.adslot{background:var(--card);border-radius:var(--r);box-shadow:var(--sh);padding:10px 18px 14px;margin-bottom:18px;text-align:center}
+.adslot[hidden]{display:none}
+.adslot-lbl{display:block;font-size:.65rem;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.adslot .adsbygoogle{display:block;min-height:90px}
 .summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:24px}
 .s-card{background:var(--card);border-radius:var(--r);padding:14px 18px;box-shadow:var(--sh)}
 .s-card.highlight{border:2px solid var(--sav)}
@@ -232,6 +241,7 @@ header p{opacity:.8;font-size:.82rem;margin-top:3px}
   var framed = true;
   try { framed = window.self !== window.top; } catch (e) { framed = true; }
   if (framed) return;
+  window.__bcAds = true;
   var s = document.createElement('script');
   s.async = true;
   s.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5091828152191443';
@@ -327,6 +337,35 @@ header p{opacity:.8;font-size:.82rem;margin-top:3px}
               onclick="openPrivacyOptions()" data-t="privacyOptions">Ad privacy</button>
     </div>
   </div>
+
+  <!-- Advertisement. Hidden until the head gate confirms the loader was
+       injected: inside the info page's iframe no ad ever arrives, and a
+       labelled empty band there would just be a gap. -->
+  <div class="adslot" id="adSlot" hidden>
+    <span class="adslot-lbl" data-t="adLabel">Advertisement</span>
+    <ins class="adsbygoogle"
+         style="display:block"
+         data-ad-client="ca-pub-5091828152191443"
+         data-ad-slot="7794592438"
+         data-ad-format="auto"
+         data-full-width-responsive="true"></ins>
+  </div>
+  <script>
+  (function () {
+    if (!window.__bcAds) return;
+    var slot = document.getElementById('adSlot');
+    var ins  = slot.querySelector('ins');
+    slot.hidden = false;
+    /* Collapse the block again if Google has nothing to serve, rather than
+       leaving a labelled 90px hole in the middle of the page. */
+    new MutationObserver(function (recs, obs) {
+      var st = ins.getAttribute('data-ad-status');
+      if (st === 'unfilled') { slot.hidden = true; obs.disconnect(); }
+      else if (st === 'filled') { obs.disconnect(); }
+    }).observe(ins, { attributes: true, attributeFilter: ['data-ad-status'] });
+    try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) {}
+  })();
+  </script>
 
   <!-- Summary -->
   <div class="summary" id="summary"></div>
@@ -873,7 +912,7 @@ const LANG = {
     listTitle:'📋 Monthly Expenses', listEmpty:'No expenses recorded yet. Click on a day to add expenses.',
     listEmptyCat:'No expenses in this category', thDesc:'Description', thQty:'Qty', thTotal:'Total',
     thTotalRow:'Total',
-    exportData:'Export', importData:'Import', privacyOptions:'Ad privacy',
+    exportData:'Export', importData:'Import', privacyOptions:'Ad privacy', adLabel:'Advertisement',
     importBad:'That file is not a Budget Calendar backup.',
     importOk:'Data restored.',
     importConfirm:'Replace ALL current data with this backup? This cannot be undone.',
@@ -915,7 +954,7 @@ const LANG = {
     listTitle:'📋 Gastos Mensuales', listEmpty:'Aún no hay gastos. Haz clic en un día para agregar.',
     listEmptyCat:'No hay gastos en esta categoría', thDesc:'Descripción', thQty:'Cant.', thTotal:'Total',
     thTotalRow:'Total',
-    exportData:'Exportar', importData:'Importar', privacyOptions:'Privacidad de anuncios',
+    exportData:'Exportar', importData:'Importar', privacyOptions:'Privacidad de anuncios', adLabel:'Publicidad',
     importBad:'Ese archivo no es un respaldo de Budget Calendar.',
     importOk:'Datos restaurados.',
     importConfirm:'¿Reemplazar TODOS los datos actuales con este respaldo? No se puede deshacer.',
@@ -960,7 +999,7 @@ const LANG = {
     listTitle:'📋 Despesas Mensais', listEmpty:'Nenhuma despesa registrada. Clique em um dia para adicionar.',
     listEmptyCat:'Nenhuma despesa nesta categoria', thDesc:'Descrição', thQty:'Qtd', thTotal:'Total',
     thTotalRow:'Total',
-    exportData:'Exportar', importData:'Importar', privacyOptions:'Privacidade dos anúncios',
+    exportData:'Exportar', importData:'Importar', privacyOptions:'Privacidade dos anúncios', adLabel:'Publicidade',
     importBad:'Este arquivo não é um backup válido.',
     importOk:'Dados restaurados.',
     importConfirm:'Substituir TODOS os dados atuais por este backup? Isso não pode ser desfeito.',
@@ -1006,7 +1045,7 @@ const LANG = {
     listTitle:'📋 Dépenses Mensuelles', listEmpty:'Aucune dépense enregistrée. Cliquez sur un jour pour en ajouter.',
     listEmptyCat:'Aucune dépense dans cette catégorie', thDesc:'Description', thQty:'Qté', thTotal:'Total',
     thTotalRow:'Total',
-    exportData:'Exporter', importData:'Importer', privacyOptions:'Confidentialité des annonces',
+    exportData:'Exporter', importData:'Importer', privacyOptions:'Confidentialité des annonces', adLabel:'Publicité',
     importBad:'Ce fichier n\'est pas une sauvegarde valide.',
     importOk:'Données restaurées.',
     importConfirm:'Remplacer TOUTES les données actuelles par cette sauvegarde ? Action irréversible.',
@@ -1052,7 +1091,7 @@ const LANG = {
     listTitle:'📋 Monatliche Ausgaben', listEmpty:'Noch keine Ausgaben erfasst. Klicken Sie auf einen Tag.',
     listEmptyCat:'Keine Ausgaben in dieser Kategorie', thDesc:'Beschreibung', thQty:'Menge', thTotal:'Gesamt',
     thTotalRow:'Gesamt',
-    exportData:'Exportieren', importData:'Importieren', privacyOptions:'Anzeigen-Datenschutz',
+    exportData:'Exportieren', importData:'Importieren', privacyOptions:'Anzeigen-Datenschutz', adLabel:'Werbung',
     importBad:'Diese Datei ist kein gültiges Backup.',
     importOk:'Daten wiederhergestellt.',
     importConfirm:'ALLE aktuellen Daten mit diesem Backup überschreiben? Kann nicht rückgängig gemacht werden.',
@@ -1098,7 +1137,7 @@ const LANG = {
     listTitle:'📋 Spese Mensili', listEmpty:'Nessuna spesa registrata. Clicca su un giorno.',
     listEmptyCat:'Nessuna spesa in questa categoria', thDesc:'Descrizione', thQty:'Q.tà', thTotal:'Totale',
     thTotalRow:'Totale',
-    exportData:'Esporta', importData:'Importa', privacyOptions:'Privacy annunci',
+    exportData:'Esporta', importData:'Importa', privacyOptions:'Privacy annunci', adLabel:'Pubblicità',
     importBad:'Questo file non è un backup valido.',
     importOk:'Dati ripristinati.',
     importConfirm:'Sostituire TUTTI i dati attuali con questo backup? Impossibile annullare.',
@@ -1140,7 +1179,7 @@ const LANG = {
     listTitle:'📋 每月支出', listEmpty:'暂无支出记录。点击日期以添加支出。',
     listEmptyCat:'该分类下无支出', thDesc:'描述', thQty:'数量', thTotal:'总计',
     thTotalRow:'总计',
-    exportData:'导出', importData:'导入', privacyOptions:'广告隐私设置',
+    exportData:'导出', importData:'导入', privacyOptions:'广告隐私设置', adLabel:'广告',
     importBad:'该文件不是有效的备份文件。',
     importOk:'数据已恢复。',
     importConfirm:'是否使用此备份替换所有当前数据？此操作无法撤销。',
@@ -1181,7 +1220,7 @@ const LANG = {
     listTitle:'📋 月間支出', listEmpty:'支出記録がありません。日付をクリックして支出を追加してください。',
     listEmptyCat:'このカテゴリに支出はありません', thDesc:'説明', thQty:'数量', thTotal:'合計',
     thTotalRow:'合計',
-    exportData:'エクスポート', importData:'インポート', privacyOptions:'広告のプライバシー',
+    exportData:'エクスポート', importData:'インポート', privacyOptions:'広告のプライバシー', adLabel:'広告',
     importBad:'このファイルは有効なバックアップではありません。',
     importOk:'データが復元されました。',
     importConfirm:'現在のすべてのデータをこのバックアップで置き換えますか？この操作は元に戻せません。',
@@ -1222,7 +1261,7 @@ const LANG = {
     listTitle:'📋 월간 지출', listEmpty:'아직 지출 기록이 없습니다. 날짜를 클릭하여 지출을 추가하세요.',
     listEmptyCat:'이 카테고리에 지출이 없습니다', thDesc:'설명', thQty:'수량', thTotal:'합계',
     thTotalRow:'합계',
-    exportData:'내보내기', importData:'가져오기', privacyOptions:'광고 개인정보',
+    exportData:'내보내기', importData:'가져오기', privacyOptions:'광고 개인정보', adLabel:'광고',
     importBad:'이 파일은 올바른 백업 파일이 아닙니다.',
     importOk:'데이터가 복원되었습니다.',
     importConfirm:'모든 현재 데이터를 이 백업으로 바꾸시겠습니까? 이 작업은 실행 취소할 수 없습니다.',
@@ -1263,7 +1302,7 @@ const LANG = {
     listTitle:'📋 Расходы за месяц', listEmpty:'Пока нет записанных расходов. Нажмите на день, чтобы добавить.',
     listEmptyCat:'Нет расходов в этой категории', thDesc:'Описание', thQty:'Кол.', thTotal:'Итого',
     thTotalRow:'Итого',
-    exportData:'Экспорт', importData:'Импорт', privacyOptions:'Реклама и данные',
+    exportData:'Экспорт', importData:'Импорт', privacyOptions:'Реклама и данные', adLabel:'Реклама',
     importBad:'Этот файл не является резервной копией Budget Calendar.',
     importOk:'Данные восстановлены.',
     importConfirm:'Заменить ВСЕ текущие данные этой резервной копией? Это действие нельзя отменить.',
@@ -1309,7 +1348,7 @@ const LANG = {
     listTitle:'📋 मासिक खर्च', listEmpty:'अभी तक कोई खर्च दर्ज नहीं किया गया। खर्च जोड़ने के लिए किसी दिन पर क्लिक करें।',
     listEmptyCat:'इस श्रेणी में कोई खर्च नहीं', thDesc:'विवरण', thQty:'मात्रा', thTotal:'कुल',
     thTotalRow:'कुल',
-    exportData:'निर्यात', importData:'आयात', privacyOptions:'विज्ञापन गोपनीयता',
+    exportData:'निर्यात', importData:'आयात', privacyOptions:'विज्ञापन गोपनीयता', adLabel:'विज्ञापन',
     importBad:'यह फ़ाइल एक मान्य बैकअप नहीं है।',
     importOk:'डेटा पुनर्स्थापित किया गया।',
     importConfirm:'क्या सभी वर्तमान डेटा को इस बैकअप से बदलें? इसे पूर्ववत नहीं किया जा सकता।',
@@ -1350,7 +1389,7 @@ const LANG = {
     listTitle:'📋 Aylık Harcamalar', listEmpty:'Henüz harcama kaydedilmedi. Eklemek için bir güne tıklayın.',
     listEmptyCat:'Bu kategoride harcama yok', thDesc:'Açıklama', thQty:'Adet', thTotal:'Toplam',
     thTotalRow:'Toplam',
-    exportData:'Dışa Aktar', importData:'İçe Aktar', privacyOptions:'Reklam gizliliği',
+    exportData:'Dışa Aktar', importData:'İçe Aktar', privacyOptions:'Reklam gizliliği', adLabel:'Reklam',
     importBad:'Bu dosya geçerli bir yedekleme değil.',
     importOk:'Veriler geri yüklendi.',
     importConfirm:'TÜM mevcut verileri bu yedeklemeyle değiştir? Bu işlem geri alınamaz.',
