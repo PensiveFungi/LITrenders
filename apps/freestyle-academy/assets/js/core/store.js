@@ -1,614 +1,590 @@
 /* =========================================================================
-   store.js — port of viewmodel/AppViewModel.kt + data/*Repository.kt
+   store.js — the web's AppViewModel.
 
-   Single source of truth for app state. Screens subscribe with store.on().
-   Persistence mirrors the Android SharedPreferences keys so the two stay
-   conceptually aligned; on the web they live in localStorage and, when a
-   user is signed in, sync to Firestore.
+   Single source of truth. Mirrors the app's rules exactly:
+
+   • A GUEST banks nothing at all. Not sessions, not minutes, not racha, not
+     logros. `accruesProgress` is the rule and it is enforced on both sides:
+     nothing is written, and reads return zeros rather than whatever an older
+     build may have left behind.
+   • XP comes ONLY from the AI assessment of the real recording, and only for
+     an ACCOUNT on a plan with XP progression. Gratis accounts keep their
+     racha and sessions while earning none.
+   • A session is recorded with xpEarned 0; the award is applied afterwards.
    ========================================================================= */
 
 import {
-  Difficulty, difficultyFromName, SessionTimer, SessionRewards, Leveling,
-  Streaks, StimulusRotation, ACHIEVEMENTS, evaluateNewlyUnlocked,
-  computeDifficultyDistribution, computeWeeklyPerformance, shuffled,
+  Leveling, Streaks, ACHIEVEMENTS, evaluateNewlyUnlocked, emptyStats,
+  recentDayStarts, dailyTotals, weekdayLetter, difficultyFromName,
 } from './domain.js';
-import { INITIAL_RHYMES } from '../data/rhymes.js';
+import { PlanTier, PlanEntitlements, DataScope, planFromName } from './plans.js';
+import { BUNDLED_RHYMES, BUNDLED_VERSION } from '../data/rhymes.js';
+import {
+  materialize, emptyOverlay, addWord as overlayAdd, removeWord as overlayRemove,
+  renameWord as overlayRename, overlayIsEmpty,
+} from './rhyme-library.js';
+import {
+  auth, loadProgressDoc, saveProgressDoc, loadRhymeOverlay, saveRhymeOverlay,
+  loadProfileDoc, saveProfileDoc, loadRhymeLibraryManifest, loadRhymeLibraryChunks,
+} from './firebase.js';
 
-const PREFIX = 'freestyle_academy_';
-const K = {
-  RHYMES: `${PREFIX}rhymes_json`,
-  HISTORY: `${PREFIX}history_json`,
-  DARK_MODE: `${PREFIX}dark_mode`,
-  TOTAL_XP: `${PREFIX}progress_total_xp`,
-  TOTAL_SESSIONS: `${PREFIX}progress_total_sessions`,
-  TOTAL_PRACTICE_SECONDS: `${PREFIX}progress_total_practice_seconds`,
-  TOTAL_ROUNDS: `${PREFIX}progress_total_rounds`,
-  CURRENT_STREAK: `${PREFIX}progress_current_streak`,
-  LONGEST_STREAK: `${PREFIX}progress_longest_streak`,
-  LAST_PRACTICE: `${PREFIX}progress_last_practice_millis`,
-  UNLOCKED: `${PREFIX}progress_unlocked_achievements_json`,
-  SESSION_HISTORY: `${PREFIX}progress_session_history_json`,
-  ALIAS: `${PREFIX}profile_alias`,
+/* ---------- storage keys (mirroring SharedPreferences) ---------- */
+
+const P = 'freestyle_academy_';
+const GLOBAL = {
+  DARK_MODE: `${P}dark_mode`,
+  ONBOARDED: `${P}onboarding_completed`,
+  LEGAL_VERSION: `${P}legal_accepted_version`,
+  LEGAL_AT: `${P}legal_accepted_at`,
+  MASTER: `${P}rhyme_master_json`,
+  MASTER_VERSION: `${P}rhyme_master_version`,
+  PLAN: `${P}plan_tier`,
 };
 
-const MAX_HISTORY_ENTRIES = 50;
+/** Scoped keys: a guest and each account keep separate partitions. */
+const scopedKey = (scope, name) =>
+  `${P}${scope.kind === 'ACCOUNT' ? `acct_${scope.uid}` : 'guest'}_${name}`;
 
-/* ---------- localStorage helpers (never throw) ---------- */
+/** The legal documents' current version, from domain/LegalDocuments.kt. */
+export const LEGAL_VERSION = 1;
 
-function readRaw(key) {
-  try { return window.localStorage.getItem(key); } catch { return null; }
-}
-function writeRaw(key, value) {
-  try { window.localStorage.setItem(key, value); } catch { /* private mode */ }
-}
-function readJson(key, fallback) {
-  const raw = readRaw(key);
-  if (raw == null) return fallback;
-  try { return JSON.parse(raw); } catch { return fallback; }
-}
-function writeJson(key, value) { writeRaw(key, JSON.stringify(value)); }
-function readInt(key, fallback = 0) {
-  const raw = readRaw(key);
-  const n = raw == null ? NaN : Number(raw);
-  return Number.isFinite(n) ? n : fallback;
-}
+/* ---------- safe localStorage ---------- */
 
-/* ---------- Tiny event emitter ---------- */
+const read = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+const write = (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } };
+const drop = (k) => { try { localStorage.removeItem(k); } catch { /* ignore */ } };
+const readJson = (k, fb) => { const r = read(k); if (r == null) return fb; try { return JSON.parse(r); } catch { return fb; } };
+const writeJson = (k, v) => write(k, JSON.stringify(v));
+const readInt = (k, fb = 0) => { const n = Number(read(k)); return Number.isFinite(n) ? n : fb; };
+
+/* ---------- emitter ---------- */
 
 class Emitter {
-  constructor() { this.listeners = new Map(); }
+  constructor() { this._l = new Map(); }
   on(event, fn) {
-    if (!this.listeners.has(event)) this.listeners.set(event, new Set());
-    this.listeners.get(event).add(fn);
-    return () => this.off(event, fn);
+    if (!this._l.has(event)) this._l.set(event, new Set());
+    this._l.get(event).add(fn);
+    return () => this._l.get(event)?.delete(fn);
   }
-  off(event, fn) { this.listeners.get(event)?.delete(fn); }
   emit(event, payload) {
-    this.listeners.get(event)?.forEach((fn) => {
-      try { fn(payload); } catch (err) { console.error(`[store] ${event} listener`, err); }
+    this._l.get(event)?.forEach((fn) => {
+      try { fn(payload); } catch (err) { console.error(`[store:${event}]`, err); }
     });
   }
 }
 
-/* ---------- Store ---------- */
+/* ---------- store ---------- */
 
 class Store extends Emitter {
   constructor() {
     super();
+    this.scope = DataScope.guest();
+    this.planTier = planFromName(read(GLOBAL.PLAN));
+    this.darkMode = read(GLOBAL.DARK_MODE) !== 'false';
+    this.onboardingCompleted = read(GLOBAL.ONBOARDED) === 'true';
+    this.legalAcceptedVersion = readInt(GLOBAL.LEGAL_VERSION, 0);
 
-    // Persisted state
-    this.rhymes = this.loadRhymes();
-    this.history = readJson(K.HISTORY, []);           // rhyme add/remove log
-    this.darkMode = readRaw(K.DARK_MODE) !== 'false'; // defaults to true, as on Android
-    this.alias = readRaw(K.ALIAS) || 'Freestyler';
+    this.master = this.loadMaster();
+    this.overlay = emptyOverlay();
+    this.rhymes = materialize(this.master, this.overlay);
+    this.history = [];
+    this.profile = { alias: '', crew: '', punchline: '', avatarId: 'avatar_16' };
 
-    // Live session state
-    this.session = null;            // SessionSection[] | null
-    this.activeSessionInfo = null;
-    this.timerPaused = false;
+    /** Live session, owned by the flow screens. */
+    this.battle = null;
     this.lastResult = null;
 
-    // Session internals (mirror the private ViewModel fields)
-    this.timerHandle = null;
-    this.sectionEndAtMillis = [];
-    this.sectionDurations = [];
-    this.pausedAtMillis = null;
-    this.totalPausedMillis = 0;
-    this.sessionStartMillis = 0;
-    this.promptsCompletedThisSession = 0;
-    this.allowStimulusRotation = false;
-    this.wordsPerSectionCount = Difficulty.MEDIUM.wordsPerSection;
-    this.activeModeId = 'libre';
-    this.activeModeName = 'Libre';
-    this.activeDifficulty = Difficulty.MEDIUM;
-
-    // Per-round audio captured during a session, consumed by the results screen
-    this.roundRecordings = [];
-
-    this.progress = this.deriveProgressState();
-
-    // Remote sync hook, installed by firebase.js once a user signs in
-    this.remote = null;
+    this.progress = this.deriveProgress();
+    this.loadPartition();
   }
 
-  /* ----- Rhyme dictionary (RhymeRepository) ----- */
+  /* ----- scope ----- */
 
-  loadRhymes() {
-    const stored = readJson(K.RHYMES, null);
-    if (!stored || typeof stored !== 'object') {
-      writeJson(K.RHYMES, INITIAL_RHYMES);
-      return { ...INITIAL_RHYMES };
-    }
-    // Seed any groups added to the app since this browser last loaded.
-    const missing = {};
-    Object.keys(INITIAL_RHYMES).forEach((key) => {
-      if (!(key in stored)) missing[key] = INITIAL_RHYMES[key];
+  get isAccount() { return DataScope.isAccount(this.scope); }
+  get legalAccepted() { return this.legalAcceptedVersion >= LEGAL_VERSION; }
+  get accruesProgress() { return PlanEntitlements.accruesProgress(this.scope); }
+  get accruesXp() { return PlanEntitlements.accruesXp(this.scope, this.planTier); }
+
+  /** Switches partition when the user signs in or out. */
+  async setScope(scope) {
+    if (this.scope.kind === scope.kind && this.scope.uid === scope.uid) return;
+    this.scope = scope;
+    this.loadPartition();
+    this.emit('scope', scope);
+    if (this.isAccount) await this.pullFromCloud();
+    this.refreshProgress();
+  }
+
+  loadPartition() {
+    this.overlay = readJson(scopedKey(this.scope, 'rhymes_overlay_json'), emptyOverlay());
+    this.rhymes = materialize(this.master, this.overlay);
+    this.history = readJson(scopedKey(this.scope, 'history_json'), []);
+    this.profile = readJson(scopedKey(this.scope, 'profile_json'), {
+      alias: '', crew: '', punchline: '', avatarId: 'avatar_16',
     });
-    if (Object.keys(missing).length > 0) {
-      const merged = { ...stored, ...missing };
-      writeJson(K.RHYMES, merged);
-      return merged;
-    }
-    return stored;
-  }
-
-  saveRhymes() {
-    writeJson(K.RHYMES, this.rhymes);
-    this.remote?.pushRhymes(this.rhymes);
+    this.progress = this.deriveProgress();
     this.emit('rhymes', this.rhymes);
-  }
-
-  saveHistory() {
-    writeJson(K.HISTORY, this.history);
-    this.remote?.pushHistory(this.history);
     this.emit('history', this.history);
+    this.emit('profile', this.profile);
   }
 
-  addWord(rhymeKey, word) {
-    const trimmed = (word || '').trim();
-    if (!trimmed) return false;
-    const list = this.rhymes[rhymeKey];
-    if (!list) return false;
-    if (list.some((w) => w.toLowerCase() === trimmed.toLowerCase())) return false;
-    this.rhymes = { ...this.rhymes, [rhymeKey]: [...list, trimmed] };
-    this.saveRhymes();
-    this.history = [
-      ...this.history,
-      { rhymeKey, word: trimmed, type: 'ADDED', timestamp: Date.now() },
-    ];
-    this.saveHistory();
+  /* ----- master rhyme library ----- */
+
+  loadMaster() {
+    const cachedVersion = readInt(GLOBAL.MASTER_VERSION, 0);
+    const cached = readJson(GLOBAL.MASTER, null);
+    // Highest version wins, and a cache that can't be parsed doesn't get to
+    // claim a version it cannot serve.
+    if (cached && typeof cached === 'object' && Object.keys(cached).length > 0
+        && cachedVersion > BUNDLED_VERSION) {
+      return cached;
+    }
+    return BUNDLED_RHYMES;
+  }
+
+  /**
+   * Checks the published master once per launch, for guests too, and
+   * re-materializes only when something actually changed. Every failure
+   * leaves the previous complete library in force.
+   */
+  async refreshMasterLibrary() {
+    try {
+      const manifest = await loadRhymeLibraryManifest();
+      if (!manifest) return;
+      const version = Number(manifest.version) || 0;
+      const current = Math.max(readInt(GLOBAL.MASTER_VERSION, 0), BUNDLED_VERSION);
+      if (version <= current) return;
+
+      const groups = await loadRhymeLibraryChunks(Number(manifest.chunkCount) || 0);
+      if (!groups) return;
+      // A manifest whose group count disagrees with what arrived is not trusted.
+      if (manifest.groupCount && Object.keys(groups).length !== Number(manifest.groupCount)) {
+        console.warn('[library] manifest/group-count mismatch; keeping current library');
+        return;
+      }
+      writeJson(GLOBAL.MASTER, groups);
+      write(GLOBAL.MASTER_VERSION, String(version));
+      this.master = groups;
+      this.rhymes = materialize(this.master, this.overlay);
+      this.emit('rhymes', this.rhymes);
+    } catch (err) {
+      console.warn('[library] refresh failed; keeping current library', err);
+    }
+  }
+
+  /* ----- rhyme edits (overlay only) ----- */
+
+  _commitOverlay(next, entry) {
+    if (next == null) return false; // a no-op edit writes no history
+    this.overlay = next;
+    writeJson(scopedKey(this.scope, 'rhymes_overlay_json'), this.overlay);
+    this.rhymes = materialize(this.master, this.overlay);
+    if (entry) {
+      this.history = [...this.history, entry];
+      writeJson(scopedKey(this.scope, 'history_json'), this.history);
+      this.emit('history', this.history);
+    }
+    this.emit('rhymes', this.rhymes);
+    if (this.isAccount) saveRhymeOverlay(this.scope.uid, this.overlay);
     return true;
   }
 
-  removeWord(rhymeKey, word) {
-    const list = this.rhymes[rhymeKey];
-    if (!list) return false;
-    const index = list.indexOf(word);
-    if (index === -1) return false;
-    const next = list.slice();
-    next.splice(index, 1);
-    this.rhymes = { ...this.rhymes, [rhymeKey]: next };
-    this.saveRhymes();
-    this.history = [
-      ...this.history,
-      { rhymeKey, word, type: 'REMOVED', timestamp: Date.now() },
-    ];
-    this.saveHistory();
-    return true;
+  addWord(key, word) {
+    const trimmed = String(word ?? '').trim();
+    return this._commitOverlay(
+      overlayAdd(this.master, this.overlay, key, trimmed),
+      { rhymeKey: key, word: trimmed, type: 'ADDED', timestamp: Date.now() }
+    );
   }
 
-  /* ----- Theme & profile ----- */
+  removeWord(key, word) {
+    return this._commitOverlay(
+      overlayRemove(this.master, this.overlay, key, word),
+      { rhymeKey: key, word, type: 'REMOVED', timestamp: Date.now() }
+    );
+  }
+
+  renameWord(key, oldWord, newWord) {
+    const trimmed = String(newWord ?? '').trim();
+    return this._commitOverlay(
+      overlayRename(this.master, this.overlay, key, oldWord, trimmed),
+      { rhymeKey: key, word: `${oldWord} → ${trimmed}`, type: 'ADDED', timestamp: Date.now() }
+    );
+  }
+
+  /* ----- preferences ----- */
 
   setDarkMode(enabled) {
     this.darkMode = enabled;
-    writeRaw(K.DARK_MODE, String(enabled));
+    write(GLOBAL.DARK_MODE, String(enabled));
     document.documentElement.dataset.theme = enabled ? 'dark' : 'light';
     this.emit('theme', enabled);
   }
 
-  setAlias(alias) {
-    this.alias = (alias || '').trim() || 'Freestyler';
-    writeRaw(K.ALIAS, this.alias);
-    this.emit('profile', this.alias);
+  completeOnboarding() {
+    this.onboardingCompleted = true;
+    write(GLOBAL.ONBOARDED, 'true');
   }
 
-  /* ----- Progression persistence (ProgressRepository) ----- */
-
-  get totalXp() { return readInt(K.TOTAL_XP); }
-  get totalSessions() { return readInt(K.TOTAL_SESSIONS); }
-  get totalPracticeSeconds() { return readInt(K.TOTAL_PRACTICE_SECONDS); }
-  get totalRoundsCompleted() { return readInt(K.TOTAL_ROUNDS); }
-  get currentStreakDays() { return readInt(K.CURRENT_STREAK); }
-  get longestStreakDays() { return readInt(K.LONGEST_STREAK); }
-  get lastPracticeMillis() { const v = readInt(K.LAST_PRACTICE); return v > 0 ? v : null; }
-  get unlockedAchievementIds() { return readJson(K.UNLOCKED, []); }
-  get sessionHistory() { return readJson(K.SESSION_HISTORY, []); }
-
-  /** Replaces all progression state — used by the Firestore pull on sign-in. */
-  applyProgressSnapshot(snap) {
-    if (!snap) return;
-    if (snap.rhymes && typeof snap.rhymes === 'object' && Object.keys(snap.rhymes).length) {
-      this.rhymes = snap.rhymes;
-      writeJson(K.RHYMES, this.rhymes);
-      this.emit('rhymes', this.rhymes);
-    }
-    if (Array.isArray(snap.history)) {
-      this.history = snap.history;
-      writeJson(K.HISTORY, this.history);
-      this.emit('history', this.history);
-    }
-    const num = (v, cur) => (Number.isFinite(v) ? v : cur);
-    writeRaw(K.TOTAL_XP, String(num(snap.totalXp, this.totalXp)));
-    writeRaw(K.TOTAL_SESSIONS, String(num(snap.totalSessions, this.totalSessions)));
-    writeRaw(K.TOTAL_PRACTICE_SECONDS, String(num(snap.totalPracticeSeconds, this.totalPracticeSeconds)));
-    writeRaw(K.TOTAL_ROUNDS, String(num(snap.totalRoundsCompleted, this.totalRoundsCompleted)));
-    writeRaw(K.CURRENT_STREAK, String(num(snap.currentStreakDays, this.currentStreakDays)));
-    writeRaw(K.LONGEST_STREAK, String(num(snap.longestStreakDays, this.longestStreakDays)));
-    if (Number.isFinite(snap.lastPracticeMillis)) {
-      writeRaw(K.LAST_PRACTICE, String(snap.lastPracticeMillis));
-    }
-    if (Array.isArray(snap.unlockedAchievementIds)) writeJson(K.UNLOCKED, snap.unlockedAchievementIds);
-    if (Array.isArray(snap.sessionHistory)) writeJson(K.SESSION_HISTORY, snap.sessionHistory);
-    if (typeof snap.alias === 'string' && snap.alias.trim()) {
-      this.alias = snap.alias.trim();
-      writeRaw(K.ALIAS, this.alias);
-      this.emit('profile', this.alias);
-    }
-    this.refreshProgressState();
+  acceptLegalDocuments() {
+    this.legalAcceptedVersion = LEGAL_VERSION;
+    write(GLOBAL.LEGAL_VERSION, String(LEGAL_VERSION));
+    write(GLOBAL.LEGAL_AT, String(Date.now()));
+    this.emit('legal', true);
   }
 
-  /** The full persisted payload, as pushed to Firestore. */
-  progressSnapshot() {
-    return {
-      alias: this.alias,
-      rhymes: this.rhymes,
-      history: this.history,
-      totalXp: this.totalXp,
-      totalSessions: this.totalSessions,
-      totalPracticeSeconds: this.totalPracticeSeconds,
-      totalRoundsCompleted: this.totalRoundsCompleted,
-      currentStreakDays: this.currentStreakDays,
-      longestStreakDays: this.longestStreakDays,
-      lastPracticeMillis: this.lastPracticeMillis,
-      unlockedAchievementIds: this.unlockedAchievementIds,
-      sessionHistory: this.sessionHistory,
-      updatedAt: Date.now(),
-    };
+  get legalAcceptedAt() { return readInt(GLOBAL.LEGAL_AT, 0) || null; }
+
+  /** Testing hook, exactly as the app has it — no billing behind it. */
+  setPlanTier(tier) {
+    this.planTier = tier;
+    write(GLOBAL.PLAN, tier);
+    this.refreshProgress();
+    this.emit('plan', tier);
   }
 
-  deriveProgressState() {
+  setProfile(patch) {
+    this.profile = { ...this.profile, ...patch };
+    writeJson(scopedKey(this.scope, 'profile_json'), this.profile);
+    this.emit('profile', this.profile);
+    if (this.isAccount) saveProfileDoc(this.scope.uid, this.profile);
+  }
+
+  get displayAlias() {
+    return this.profile.alias?.trim() || (this.isAccount ? 'MC' : 'Invitado');
+  }
+
+  /* ----- progression storage ----- */
+
+  _pk(name) { return scopedKey(this.scope, `progress_${name}`); }
+
+  get totalXp() { return this.accruesProgress ? readInt(this._pk('total_xp')) : 0; }
+  get totalSessions() { return this.accruesProgress ? readInt(this._pk('total_sessions')) : 0; }
+  get totalPracticeSeconds() { return this.accruesProgress ? readInt(this._pk('total_practice_seconds')) : 0; }
+  get totalRounds() { return this.accruesProgress ? readInt(this._pk('total_rounds')) : 0; }
+  get storedStreakDays() { return this.accruesProgress ? readInt(this._pk('current_streak')) : 0; }
+  get longestStreakDays() { return this.accruesProgress ? readInt(this._pk('longest_streak')) : 0; }
+  get lastPracticeMillis() {
+    if (!this.accruesProgress) return null;
+    const v = readInt(this._pk('last_practice_millis'));
+    return v > 0 ? v : null;
+  }
+  get unlockedAchievementIds() { return this.accruesProgress ? readJson(this._pk('unlocked_json'), []) : []; }
+  get sessionHistory() { return this.accruesProgress ? readJson(this._pk('session_history_json'), []) : []; }
+
+  /** The racha shown in the UI — re-derived so a stale streak decays. */
+  get displayRacha() {
+    return Streaks.displayRacha(this.storedStreakDays, this.lastPracticeMillis, Date.now());
+  }
+
+  deriveProgress() {
     const totalXp = this.totalXp;
-    const levelInfo = Leveling.levelFromTotalXp(totalXp);
+    const info = Leveling.levelFromTotalXp(totalXp);
     const history = this.sessionHistory;
-    const unlockedIds = new Set(this.unlockedAchievementIds);
+    const unlocked = new Set(this.unlockedAchievementIds);
+
     const allAchievements = ACHIEVEMENTS.map((def) => ({
       id: def.id,
       title: def.title,
       description: def.description,
-      unlocked: unlockedIds.has(def.id),
+      unlocked: unlocked.has(def.id),
+      plusOnly: !PlanEntitlements.FREE_TIER_ACHIEVEMENT_IDS.has(def.id)
+        && !PlanEntitlements.hasXpProgression(this.planTier),
+      accountOnly: !this.isAccount,
     }));
+
+    // Habilidades and the weekly graph render on every plan but stay at zero
+    // where XP doesn't accrue, so an award from an older build can't draw a
+    // climbing line either.
+    const showsXp = this.accruesXp;
+    const dayStarts = recentDayStarts();
+    const scores = showsXp
+      ? history.map((r) => ({ timestampMillis: r.timestampMillis, score: r.xpEarned || 0 }))
+      : [];
+    const totals = dailyTotals(dayStarts, scores);
+
+    const totalSeconds = history.reduce((s, r) => s + (r.practiceSeconds || 0), 0);
+    const byDifficulty = ['EASY', 'MEDIUM', 'HARD'].map((name) => {
+      const d = difficultyFromName(name);
+      if (!showsXp || totalSeconds === 0) return { name: d.label, progress: 0 };
+      const secs = history.filter((r) => r.difficulty === name)
+        .reduce((s, r) => s + (r.practiceSeconds || 0), 0);
+      return { name: d.label, progress: secs / totalSeconds };
+    });
+
+    const lastXpSession = [...history].reverse().find((r) => (r.xpEarned || 0) > 0);
+
     return {
-      currentLevel: levelInfo.level,
-      currentXp: levelInfo.xpIntoLevel,
-      nextLevelXp: levelInfo.xpForNextLevel,
-      xpProgress: levelInfo.xpForNextLevel === 0
-        ? 0
-        : Math.min(1, Math.max(0, levelInfo.xpIntoLevel / levelInfo.xpForNextLevel)),
-      practiceStreakDays: this.currentStreakDays,
+      currentLevel: info.level,
+      currentXp: info.xpIntoLevel,
+      nextLevelXp: info.xpForNextLevel,
+      xpProgress: info.xpForNextLevel ? Math.min(1, info.xpIntoLevel / info.xpForNextLevel) : 0,
+      totalXp,
+      practiceStreakDays: this.displayRacha,
       totalSessions: this.totalSessions,
       totalPracticeMinutes: Math.floor(this.totalPracticeSeconds / 60),
-      weeklyPerformance: computeWeeklyPerformance(history),
+      weeklyPerformance: dayStarts.map((d, i) => ({ day: weekdayLetter(d), score: totals[i] })),
       recentAchievements: allAchievements.filter((a) => a.unlocked).slice(-3),
       allAchievements,
-      skillCategories: computeDifficultyDistribution(history),
+      skillCategories: byDifficulty,
       sessionHistory: history,
+      pointsReachedAtMillis: lastXpSession?.timestampMillis || 0,
     };
   }
 
-  refreshProgressState() {
-    this.progress = this.deriveProgressState();
+  refreshProgress() {
+    this.progress = this.deriveProgress();
     this.emit('progress', this.progress);
   }
 
-  /* ----- Session lifecycle ----- */
+  /* ----- completing a session ----- */
 
   /**
-   * Starts a session. Every section's countdown begins PAUSED — the session
-   * screen calls toggleTimerPause() once recording actually starts, so setup
-   * and countdown time never count against the round.
+   * Records a finished session. **xpEarned is always 0 here** — the award, if
+   * any, is applied afterwards by applyAiXpAward once the evaluation lands.
+   *
+   * A guest banks nothing: no history, no counters, no streak, no logros.
    */
-  startSession({
-    sectionCount, rhymeKeys, sectionDurationsSeconds,
-    modeId, modeName, difficulty, allowStimulusChanges,
-  }) {
-    const count = Math.min(4, Math.max(1, sectionCount));
-    const durations = Array.from({ length: count }, (_, i) => {
-      if (!sectionDurationsSeconds || sectionDurationsSeconds.length === 0) return 45;
-      return sectionDurationsSeconds[i] ?? sectionDurationsSeconds[sectionDurationsSeconds.length - 1];
-    });
-    const keys = Array.from({ length: count }, (_, i) => rhymeKeys[i] ?? rhymeKeys[0] ?? '');
-
-    this.activeModeId = modeId;
-    this.activeModeName = modeName;
-    this.activeDifficulty = difficulty;
-    this.allowStimulusRotation = allowStimulusChanges;
-    this.wordsPerSectionCount = difficulty.wordsPerSection;
-    this.activeSessionInfo = {
-      modeId, modeName, difficulty, allowStimulusChanges,
-      roundDurationsSeconds: durations,
-    };
-
-    this.sessionStartMillis = Date.now();
-    this.totalPausedMillis = 0;
-    this.pausedAtMillis = this.sessionStartMillis;
-    this.promptsCompletedThisSession = 0;
-    this.sectionDurations = durations.slice();
-    this.sectionEndAtMillis = new Array(count).fill(this.sessionStartMillis);
-    this.roundRecordings = [];
-
-    this.session = keys.map((key, index) => {
-      const pool = this.rhymes[key] || [];
-      const duration = durations[index];
-      this.sectionEndAtMillis[index] = SessionTimer.endAtMillis(this.sessionStartMillis, duration);
-      return {
-        rhymeKey: key,
-        displayedWords: shuffled(pool).slice(0, this.wordsPerSectionCount),
-        remainingSeconds: duration,
-        cycleDurationSeconds: duration,
-      };
-    });
-
-    this.timerPaused = true;
-    this.lastResult = null;
-    this.startTicker();
-    this.emit('session', this.session);
-  }
-
-  startTicker() {
-    this.stopTicker();
-    this.timerHandle = window.setInterval(() => {
-      if (this.timerPaused) return;
-      const current = this.session;
-      if (!current) return;
-      const now = Date.now();
-      const usedKeys = current.map((s) => s.rhymeKey);
-      let changed = false;
-
-      const updated = current.map((section, index) => {
-        const endAt = this.sectionEndAtMillis[index];
-        if (endAt == null) return section;
-        const remaining = SessionTimer.remainingSeconds(endAt, now);
-        if (remaining <= 0) {
-          this.promptsCompletedThisSession += 1;
-          const duration = this.sectionDurations[index] ?? 45;
-          this.sectionEndAtMillis[index] = SessionTimer.endAtMillis(now, duration);
-          const newKey = this.allowStimulusRotation
-            ? StimulusRotation.pickRotationKey(section.rhymeKey, usedKeys, Object.keys(this.rhymes))
-            : section.rhymeKey;
-          const pool = this.rhymes[newKey] || [];
-          changed = true;
-          return {
-            rhymeKey: newKey,
-            displayedWords: StimulusRotation.freshWords(pool, section.displayedWords, this.wordsPerSectionCount),
-            remainingSeconds: duration,
-            cycleDurationSeconds: duration,
-          };
-        }
-        if (remaining !== section.remainingSeconds) {
-          changed = true;
-          return { ...section, remainingSeconds: remaining };
-        }
-        return section;
-      });
-
-      if (changed) {
-        this.session = updated;
-        this.emit('session', this.session);
-      }
-    }, 250);
-  }
-
-  stopTicker() {
-    if (this.timerHandle != null) {
-      window.clearInterval(this.timerHandle);
-      this.timerHandle = null;
-    }
-  }
-
-  /** Replaces one word with an unused word from the same rhyme pool. */
-  swapWord(sectionIndex, wordIndex) {
-    const current = this.session;
-    if (!current) return;
-    const section = current[sectionIndex];
-    if (!section) return;
-    const pool = this.rhymes[section.rhymeKey] || [];
-    const available = pool.filter((w) => !section.displayedWords.includes(w));
-    if (available.length === 0) return;
-    const newWord = available[Math.floor(Math.random() * available.length)];
-    const updatedWords = section.displayedWords.slice();
-    updatedWords[wordIndex] = newWord;
-    const next = current.slice();
-    next[sectionIndex] = { ...section, displayedWords: updatedWords };
-    this.session = next;
-    this.promptsCompletedThisSession += 1;
-    this.emit('session', this.session);
-  }
-
-  /** Switches a section to a different rhyme group and resets its words + timer. */
-  changeSectionRhyme(sectionIndex, newRhymeKey) {
-    const current = this.session;
-    if (!current) return;
-    const section = current[sectionIndex];
-    if (!section) return;
-    const pool = this.rhymes[newRhymeKey] || [];
-    const duration = this.sectionDurations[sectionIndex] ?? section.cycleDurationSeconds ?? 45;
-    if (sectionIndex < this.sectionEndAtMillis.length) {
-      this.sectionEndAtMillis[sectionIndex] = SessionTimer.endAtMillis(Date.now(), duration);
-    }
-    const next = current.slice();
-    next[sectionIndex] = {
-      rhymeKey: newRhymeKey,
-      displayedWords: shuffled(pool).slice(0, this.wordsPerSectionCount),
-      remainingSeconds: duration,
-      cycleDurationSeconds: duration,
-    };
-    this.session = next;
-    this.promptsCompletedThisSession += 1;
-    this.emit('session', this.session);
-  }
-
-  /** Fresh sample of words for one section, and resets its timer. */
-  resetSection(sectionIndex) {
-    const current = this.session;
-    if (!current) return;
-    const section = current[sectionIndex];
-    if (!section) return;
-    const pool = this.rhymes[section.rhymeKey] || [];
-    const duration = this.sectionDurations[sectionIndex] ?? section.cycleDurationSeconds ?? 45;
-    if (sectionIndex < this.sectionEndAtMillis.length) {
-      this.sectionEndAtMillis[sectionIndex] = SessionTimer.endAtMillis(Date.now(), duration);
-    }
-    const next = current.slice();
-    next[sectionIndex] = {
-      ...section,
-      displayedWords: StimulusRotation.freshWords(pool, section.displayedWords, this.wordsPerSectionCount),
-      remainingSeconds: duration,
-      cycleDurationSeconds: duration,
-    };
-    this.session = next;
-    this.promptsCompletedThisSession += 1;
-    this.emit('session', this.session);
-  }
-
-  toggleTimerPause() {
+  completeSession({ modeId, modeName, difficulty, rhymeKeys, roundsPlanned, roundsCompleted, practiceSeconds, isBattle = false }) {
     const now = Date.now();
-    if (this.pausedAtMillis != null) {
-      const pausedDuration = now - this.pausedAtMillis;
-      this.totalPausedMillis += pausedDuration;
-      this.sectionEndAtMillis = this.sectionEndAtMillis.map((v) => (v == null ? v : v + pausedDuration));
-      this.pausedAtMillis = null;
-      this.timerPaused = false;
-    } else {
-      this.pausedAtMillis = now;
-      this.timerPaused = true;
-    }
-    this.emit('timer', this.timerPaused);
-  }
-
-  /** Abandons the session without saving progress. */
-  endSession() { this.cleanupSession(); }
-
-  cleanupSession() {
-    this.stopTicker();
-    this.sectionEndAtMillis = [];
-    this.sectionDurations = [];
-    this.pausedAtMillis = null;
-    this.totalPausedMillis = 0;
-    this.timerPaused = false;
-    this.session = null;
-    this.activeSessionInfo = null;
-    this.emit('session', null);
-  }
-
-  attachRecording(roundIndex, blob) {
-    this.roundRecordings[roundIndex] = blob;
-  }
-
-  /**
-   * Ends the session honestly, persists progression, and returns the result.
-   * [roundsCompleted] reflects how many rounds the player actually went
-   * through, so an early "Completar" is recorded as a partial session.
-   */
-  completeSession(roundsCompleted) {
-    const sections = this.session;
-    if (!sections) return null;
-
-    const planned = sections.length;
-    const actualRoundsCompleted = Math.min(planned, Math.max(0, roundsCompleted ?? planned));
-    const completedFully = actualRoundsCompleted >= planned;
-    const now = Date.now();
-    const pausedJustNow = this.pausedAtMillis != null ? now - this.pausedAtMillis : 0;
-    const practiceSeconds = Math.max(
-      0,
-      Math.floor((now - this.sessionStartMillis - this.totalPausedMillis - pausedJustNow) / 1000)
-    );
-
-    const newStreak = Streaks.updateStreak(this.currentStreakDays, this.lastPracticeMillis, now);
-    const xpEarned = SessionRewards.calculateXp({
-      practiceSeconds,
-      roundsCompleted: actualRoundsCompleted,
-      promptsCompleted: this.promptsCompletedThisSession,
-      difficulty: this.activeDifficulty,
-      completedFully,
-      currentStreakDays: newStreak,
-    });
-
     const record = {
       id: now,
       timestampMillis: now,
-      modeId: this.activeModeId,
-      modeName: this.activeModeName,
-      difficulty: this.activeDifficulty.name,
-      difficultyLabel: this.activeDifficulty.label,
-      rhymeKeys: sections.map((s) => s.rhymeKey),
-      roundsPlanned: planned,
-      roundsCompleted: actualRoundsCompleted,
-      promptsCompleted: this.promptsCompletedThisSession,
+      modeId,
+      modeName,
+      difficulty: difficulty.name,
+      difficultyLabel: difficulty.label,
+      rhymeKeys: rhymeKeys || [],
+      roundsPlanned,
+      roundsCompleted,
+      promptsCompleted: 0,
       practiceSeconds,
-      xpEarned,
-      completedFully,
+      xpEarned: 0,
+      completedFully: roundsCompleted >= roundsPlanned,
+      isBattle,
     };
 
-    const result = this.persistCompletedSession(record, newStreak, now);
-    const recordings = this.roundRecordings.slice(0, planned).filter(Boolean);
-    this.cleanupSession();
-    this.lastResult = { ...result, recordings };
+    if (!this.accruesProgress) {
+      // An unbanked result: the finish screen still shows what was played.
+      const info = Leveling.levelFromTotalXp(0);
+      this.lastResult = {
+        record,
+        newlyUnlockedAchievements: [],
+        totalXp: 0,
+        level: info.level,
+        xpIntoLevel: info.xpIntoLevel,
+        xpForNextLevel: info.xpForNextLevel,
+        unbanked: true,
+        streakDays: 0,
+        streakAdvanced: false,
+      };
+      this.emit('result', this.lastResult);
+      return this.lastResult;
+    }
+
+    const previousStreak = this.storedStreakDays;
+    const last = this.lastPracticeMillis;
+    const newStreak = Streaks.updateStreak(previousStreak, last, now);
+    const streakAdvanced = last == null || !Streaks.isSameDay(last, now);
+
+    write(this._pk('total_sessions'), String(this.totalSessions + 1));
+    write(this._pk('total_practice_seconds'), String(this.totalPracticeSeconds + practiceSeconds));
+    write(this._pk('total_rounds'), String(this.totalRounds + roundsCompleted));
+    write(this._pk('current_streak'), String(newStreak));
+    write(this._pk('longest_streak'), String(Math.max(this.longestStreakDays, newStreak)));
+    write(this._pk('last_practice_millis'), String(now));
+    writeJson(this._pk('session_history_json'), [...this.sessionHistory, record].slice(-50));
+
+    if (isBattle) {
+      write(this._pk('total_battles'), String(readInt(this._pk('total_battles')) + 1));
+    }
+
+    const unlocked = this._evaluateAchievements();
+    this.refreshProgress();
+    this.pushToCloud();
+
+    const info = Leveling.levelFromTotalXp(this.totalXp);
+    this.lastResult = {
+      record,
+      newlyUnlockedAchievements: unlocked,
+      totalXp: this.totalXp,
+      level: info.level,
+      xpIntoLevel: info.xpIntoLevel,
+      xpForNextLevel: info.xpForNextLevel,
+      unbanked: false,
+      streakDays: newStreak,
+      streakAdvanced,
+    };
     this.emit('result', this.lastResult);
     return this.lastResult;
   }
 
-  persistCompletedSession(record, newStreak, now) {
-    const newTotalXp = this.totalXp + record.xpEarned;
-    const newTotalSessions = this.totalSessions + 1;
-    const newTotalPracticeSeconds = this.totalPracticeSeconds + record.practiceSeconds;
-    const newTotalRounds = this.totalRoundsCompleted + record.roundsCompleted;
-    const newLongestStreak = Math.max(this.longestStreakDays, newStreak);
-    const newHistory = [...this.sessionHistory, record].slice(-MAX_HISTORY_ENTRIES);
+  _evaluateAchievements() {
+    const info = Leveling.levelFromTotalXp(this.totalXp);
+    const stats = emptyStats({
+      totalSessions: this.totalSessions,
+      totalPracticeMinutes: Math.floor(this.totalPracticeSeconds / 60),
+      totalRoundsCompleted: this.totalRounds,
+      currentStreakDays: this.storedStreakDays,
+      longestStreakDays: this.longestStreakDays,
+      level: info.level,
+      totalBattles: readInt(this._pk('total_battles')),
+      totalBattleWins: readInt(this._pk('total_battle_wins')),
+    });
+    const already = this.unlockedAchievementIds;
+    const fresh = evaluateNewlyUnlocked(stats, already)
+      .filter((a) => PlanEntitlements.canUnlockAchievement(this.planTier, a.id));
+    if (fresh.length) {
+      writeJson(this._pk('unlocked_json'), [...already, ...fresh.map((a) => a.id)]);
+    }
+    return fresh.map((a) => ({
+      id: a.id, title: a.title, description: a.description, unlocked: true,
+    }));
+  }
 
-    writeRaw(K.TOTAL_XP, String(newTotalXp));
-    writeRaw(K.TOTAL_SESSIONS, String(newTotalSessions));
-    writeRaw(K.TOTAL_PRACTICE_SECONDS, String(newTotalPracticeSeconds));
-    writeRaw(K.TOTAL_ROUNDS, String(newTotalRounds));
-    writeRaw(K.CURRENT_STREAK, String(newStreak));
-    writeRaw(K.LONGEST_STREAK, String(newLongestStreak));
-    writeRaw(K.LAST_PRACTICE, String(now));
-    writeJson(K.SESSION_HISTORY, newHistory);
+  /**
+   * Applies the AI award to the session just recorded. Refuses whenever the
+   * partition may not accrue XP — the same gate every XP-showing screen reads,
+   * so no surface can promise an award this would reject.
+   */
+  applyAiXpAward(totalXp) {
+    if (!this.accruesXp) return false;
+    const award = Math.max(0, Math.round(totalXp));
+    if (award === 0) return false;
 
-    const levelInfo = Leveling.levelFromTotalXp(newTotalXp);
-    const stats = {
-      totalSessions: newTotalSessions,
-      totalPracticeMinutes: Math.floor(newTotalPracticeSeconds / 60),
-      totalRoundsCompleted: newTotalRounds,
-      currentStreakDays: newStreak,
-      longestStreakDays: newLongestStreak,
-      level: levelInfo.level,
+    write(this._pk('total_xp'), String(this.totalXp + award));
+
+    const history = this.sessionHistory;
+    if (history.length) {
+      history[history.length - 1] = { ...history[history.length - 1], xpEarned: award };
+      writeJson(this._pk('session_history_json'), history);
+    }
+    if (this.lastResult) {
+      this.lastResult.record = { ...this.lastResult.record, xpEarned: award };
+      this.lastResult.totalXp = this.totalXp;
+      const info = Leveling.levelFromTotalXp(this.totalXp);
+      this.lastResult.level = info.level;
+      this.lastResult.xpIntoLevel = info.xpIntoLevel;
+      this.lastResult.xpForNextLevel = info.xpForNextLevel;
+      const fresh = this._evaluateAchievements();
+      if (fresh.length) {
+        this.lastResult.newlyUnlockedAchievements = [
+          ...this.lastResult.newlyUnlockedAchievements, ...fresh,
+        ];
+      }
+    }
+    this.refreshProgress();
+    this.pushToCloud();
+    this.emit('result', this.lastResult);
+    return true;
+  }
+
+  /* ----- cloud sync (the account's own documents) ----- */
+
+  progressSnapshot() {
+    return {
+      totalXp: this.totalXp,
+      totalSessions: this.totalSessions,
+      totalPracticeSeconds: this.totalPracticeSeconds,
+      totalRoundsCompleted: this.totalRounds,
+      currentStreakDays: this.storedStreakDays,
+      longestStreakDays: this.longestStreakDays,
+      lastPracticeMillis: this.lastPracticeMillis,
+      unlockedAchievementIds: this.unlockedAchievementIds,
+      sessionHistory: this.sessionHistory,
+      syncedAt: Date.now(),
     };
-    const alreadyUnlocked = this.unlockedAchievementIds;
-    const newlyUnlocked = evaluateNewlyUnlocked(stats, alreadyUnlocked);
-    if (newlyUnlocked.length > 0) {
-      writeJson(K.UNLOCKED, [...alreadyUnlocked, ...newlyUnlocked.map((a) => a.id)]);
+  }
+
+  async pullFromCloud() {
+    if (!this.isAccount) return;
+    const uid = this.scope.uid;
+    const [remote, overlay, profile] = await Promise.all([
+      loadProgressDoc(uid), loadRhymeOverlay(uid), loadProfileDoc(uid),
+    ]);
+
+    if (remote) {
+      const localStamp = readInt(this._pk('synced_at'));
+      // Whole-document last-write-wins, as the app's sync does.
+      if ((remote.syncedAt || 0) >= localStamp) {
+        const set = (k, v) => { if (Number.isFinite(v)) write(this._pk(k), String(v)); };
+        set('total_xp', remote.totalXp);
+        set('total_sessions', remote.totalSessions);
+        set('total_practice_seconds', remote.totalPracticeSeconds);
+        set('total_rounds', remote.totalRoundsCompleted);
+        set('current_streak', remote.currentStreakDays);
+        set('longest_streak', remote.longestStreakDays);
+        set('last_practice_millis', remote.lastPracticeMillis);
+        if (Array.isArray(remote.unlockedAchievementIds)) {
+          writeJson(this._pk('unlocked_json'), remote.unlockedAchievementIds);
+        }
+        if (Array.isArray(remote.sessionHistory)) {
+          writeJson(this._pk('session_history_json'), remote.sessionHistory);
+        }
+        write(this._pk('synced_at'), String(remote.syncedAt || Date.now()));
+      }
     }
 
-    this.refreshProgressState();
-    this.remote?.pushProgress(this.progressSnapshot());
+    if (overlay) {
+      this.overlay = overlay;
+      writeJson(scopedKey(this.scope, 'rhymes_overlay_json'), overlay);
+      this.rhymes = materialize(this.master, this.overlay);
+      this.emit('rhymes', this.rhymes);
+    }
+    if (profile) {
+      this.profile = { ...this.profile, ...profile };
+      writeJson(scopedKey(this.scope, 'profile_json'), this.profile);
+      this.emit('profile', this.profile);
+    }
 
-    return {
-      record,
-      newlyUnlockedAchievements: newlyUnlocked.map((a) => ({
-        id: a.id, title: a.title, description: a.description, unlocked: true,
-      })),
-      totalXp: newTotalXp,
-      level: levelInfo.level,
-      xpIntoLevel: levelInfo.xpIntoLevel,
-      xpForNextLevel: levelInfo.xpForNextLevel,
-    };
+    // A heartbeat on every sign-in, so the league projection backfills this
+    // row without anybody opting in.
+    this.pushToCloud();
+    this.refreshProgress();
   }
 
-  /** Wipes every local key. Used by Ajustes → "Borrar datos locales". */
-  resetLocalData() {
-    Object.values(K).forEach((key) => {
-      try { window.localStorage.removeItem(key); } catch { /* ignore */ }
-    });
-    this.rhymes = { ...INITIAL_RHYMES };
-    writeJson(K.RHYMES, this.rhymes);
+  pushToCloud() {
+    if (!this.isAccount) return;
+    const snapshot = this.progressSnapshot();
+    write(this._pk('synced_at'), String(snapshot.syncedAt));
+    clearTimeout(this._pushTimer);
+    this._pushTimer = setTimeout(() => saveProgressDoc(this.scope.uid, snapshot), 900);
+  }
+
+  /* ----- data reset ----- */
+
+  /** Erasing all data resets this browser to a fresh-install state. */
+  eraseAllData() {
+    try {
+      const keys = [];
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith(P)) keys.push(k);
+      }
+      keys.forEach(drop);
+    } catch { /* ignore */ }
+
+    this.planTier = PlanTier.FREE;
+    this.darkMode = true;
+    this.onboardingCompleted = false;
+    this.legalAcceptedVersion = 0;
+    this.master = BUNDLED_RHYMES;
+    this.overlay = emptyOverlay();
+    this.rhymes = materialize(this.master, this.overlay);
     this.history = [];
-    this.alias = 'Freestyler';
-    this.refreshProgressState();
+    this.profile = { alias: '', crew: '', punchline: '', avatarId: 'avatar_16' };
+    this.refreshProgress();
     this.emit('rhymes', this.rhymes);
     this.emit('history', this.history);
-    this.emit('profile', this.alias);
+    this.emit('profile', this.profile);
   }
+
+  get hasLocalEdits() { return !overlayIsEmpty(this.overlay); }
 }
 
 export const store = new Store();
-export { difficultyFromName };
+
+/* Keep the store's partition in step with Firebase Auth. */
+auth.onChange((user) => {
+  store.setScope(user ? DataScope.account(user.uid) : DataScope.guest());
+});

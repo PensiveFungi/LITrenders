@@ -1,22 +1,28 @@
-/* results.js — port of ui/screens/ResultsScreen.kt (route: results)
-   Adds the AI feedback panel: transcript + FMS-dimension scoring from the
-   Groq pipeline behind the Cloud Function. */
+/* =========================================================================
+   results.js — port of battles/offline/OfflineResultsScreen.kt (solo variant)
+
+   The one config-driven end screen. Solo shows a practice summary; a battle
+   shows a completion summary plus the AI verdict once it lands.
+
+   XP is NOT a bonus panel here — it is the award itself, and the screen waits
+   on the evaluation because that is the only thing that produces one.
+   ========================================================================= */
 
 import { store } from '../core/store.js';
 import { navigate } from '../core/router.js';
-import { formatSeconds } from '../core/domain.js';
-import { styleForModeId } from '../data/modes.js';
+import { formatDurationSeconds } from '../core/domain.js';
+import { ScoringState } from '../core/ai.js';
+import { scoring, unavailableMessage } from '../core/scoring.js';
 import {
-  analyzeRound, isFeedbackEnabled, FEEDBACK_DIMENSIONS, FeedbackUnavailable,
-} from '../core/feedback.js';
-import {
-  esc, icon, progressBar, summaryRows, achievementRow, applyModeTheme, toast, emptyState,
+  esc, icon, summaryRows, progressBar, achievementRow, emptyState, upsell,
+  resetAccent, toast,
 } from '../ui/components.js';
 
 export function renderResults(root) {
   const result = store.lastResult;
 
   if (!result) {
+    resetAccent();
     root.innerHTML = `
       <div class="screen" style="justify-content:center">
         ${emptyState('Sin resultados que mostrar',
@@ -28,214 +34,205 @@ export function renderResults(root) {
   }
 
   const { record } = result;
-  const style = styleForModeId(record.modeId);
-  applyModeTheme(record.modeId);
 
-  const recordings = result.recordings || [];
-  const canAnalyze = isFeedbackEnabled() && recordings.length > 0;
-
-  root.innerHTML = `
-    <div class="screen">
-      <span class="result-crown">${icon('crown', { size: 54 })}</span>
-
-      <h1 class="result-title display">
-        ${record.completedFully ? '¡Sesión completada!' : 'Sesión guardada'}
-      </h1>
-      <p class="result-xp display">+${record.xpEarned} XP</p>
-
-      <div class="card stack">
-        <h2 style="font-size:18px;font-weight:700">Resumen de la sesión</h2>
-        ${summaryRows([
-          ['Modo', record.modeName],
-          ['Dificultad', record.difficultyLabel],
-          ['Rondas completadas', `${record.roundsCompleted} / ${record.roundsPlanned}`],
-          ['Estímulos trabajados', String(record.promptsCompleted)],
-          ['Tiempo de práctica', formatSeconds(record.practiceSeconds)],
-          ['Rimas', record.rhymeKeys.map((k) => `-${k}`).join(' · ')],
-        ])}
-      </div>
-
-      <div class="card stack">
-        <div class="row row--between" style="align-items:flex-end">
-          <span>
-            <span class="dim" style="display:block">Nivel</span>
-            <span class="display" style="font-size:28px">Nivel ${result.level}</span>
-          </span>
-          <span style="color:var(--mode-primary);font-weight:700">
-            ${result.xpIntoLevel} / ${result.xpForNextLevel} XP
-          </span>
-        </div>
-        ${progressBar(result.xpForNextLevel ? result.xpIntoLevel / result.xpForNextLevel : 0)}
-        <p class="dim" style="margin:0">${result.totalXp} XP acumulados en total</p>
-      </div>
-
-      ${result.newlyUnlockedAchievements.length > 0 ? `
-        <div class="section">
-          <h2 class="section__title">Logros desbloqueados</h2>
-          <div class="list">${result.newlyUnlockedAchievements.map(achievementRow).join('')}</div>
-        </div>` : ''}
-
-      <div class="section" data-slot="feedback"></div>
-
-      <div class="btn-row">
-        <button class="btn btn--outline" type="button" data-action="retry">
-          ${icon('refresh', { size: 18 })} Reintentar
-        </button>
-        <button class="btn btn--primary" type="button" data-go="train">Continuar</button>
-      </div>
-
-      <button class="btn btn--outline" type="button" data-action="share">
-        ${icon('share', { size: 18 })} Compartir resultado
-      </button>
-    </div>`;
-
-  /* ---------- AI feedback ---------- */
-
-  const feedbackHost = root.querySelector('[data-slot="feedback"]');
-
-  function feedbackIdle() {
-    if (!isFeedbackEnabled()) {
-      feedbackHost.innerHTML = '';
-      return;
-    }
-    if (recordings.length === 0) {
-      feedbackHost.innerHTML = `
-        <h2 class="section__title">Análisis con IA</h2>
-        <div class="card">
+  function xpBlock() {
+    // Guest / Gratis: no XP at all, and the screen says which it is rather
+    // than showing a zero.
+    if (result.unbanked) {
+      return `
+        <p class="result-title">Sesión terminada</p>
+        <div class="upsell">
+          <p class="upsell__title">${icon('person', { size: 17 })} Nada guardado</p>
           <p class="muted" style="margin:0">
-            No se grabó audio en esta sesión, así que no hay nada que analizar.
-            Activa el micrófono al empezar la ronda para recibir feedback.
+            Como invitado tu progreso no se guarda: ni sesiones, ni racha, ni logros.
           </p>
+          <button class="btn btn--primary btn--compact" type="button" data-go="login">
+            Crear cuenta
+          </button>
         </div>`;
-      return;
     }
-    feedbackHost.innerHTML = `
-      <h2 class="section__title">Análisis con IA</h2>
-      <div class="card stack">
-        <p class="muted" style="margin:0">
-          Transcribimos tu ronda y la puntuamos sobre las dimensiones de FMS:
-          rima, flow, técnica, puesta en escena y respuestas.
-        </p>
-        <button class="btn btn--primary" type="button" data-action="analyze">
-          ${icon('waveform', { size: 18 })} Analizar mi ronda
+
+    if (!store.accruesXp) {
+      return `
+        <p class="result-title">¡Sesión completada!</p>
+        ${upsell('Sin XP en el plan Gratis',
+          'Tu sesión, tu racha y tus logros del plan Gratis sí quedan guardados. El XP y la evaluación con IA son parte de Plus.')}`;
+    }
+
+    switch (scoring.state) {
+      case ScoringState.RUNNING:
+        return `
+          <p class="result-title">¡Sesión completada!</p>
+          <div class="card row" style="gap:14px">
+            <span class="spinner"></span>
+            <span class="muted">Evaluando tu sesión con IA…</span>
+          </div>`;
+
+      case ScoringState.READY: {
+        const b = scoring.breakdown;
+        const hasBonus = b.combinedMultiplier > 1.001;
+        return `
+          <p class="result-title">¡Sesión completada!</p>
+          <p class="result-xp">+${result.record.xpEarned} XP</p>
+          <div class="card stack">
+            ${summaryRows([
+              ['XP base (IA)', `${b.baseXp}`],
+              ...(scoring.stimulusBonus > 0 ? [['Del cual, estímulos usados', `${scoring.stimulusBonus}`]] : []),
+              ...(b.rachaMultiplier > 1 ? [['Multiplicador racha', `×${b.rachaMultiplier.toFixed(2)}`]] : []),
+              ...(b.sessionMultiplier > 1 ? [['Multiplicador sesión larga', `×${b.sessionMultiplier.toFixed(2)}`]] : []),
+              ...(b.battleMultiplier > 1 ? [['Multiplicador batalla', `×${b.battleMultiplier.toFixed(2)}`]] : []),
+              ...(hasBonus ? [['Total aplicado', `×${b.combinedMultiplier.toFixed(2)}`]] : []),
+            ])}
+          </div>
+          <div class="card stack">
+            <h2 style="font-size:16px;font-weight:700">Cómo sonó</h2>
+            <div class="stack" style="gap:6px">
+              <div class="row row--between"><span class="muted">Flow</span>
+                <span style="font-weight:700">${Math.round(scoring.flow * 100)}%</span></div>
+              ${progressBar(scoring.flow, { thin: true })}
+            </div>
+            <div class="stack" style="gap:6px">
+              <div class="row row--between"><span class="muted">Densidad de rima</span>
+                <span style="font-weight:700">${Math.round(scoring.rhyme * 100)}%</span></div>
+              ${progressBar(scoring.rhyme, { thin: true })}
+            </div>
+            ${scoring.assessments[0]?.rationale
+              ? `<p class="muted" style="margin:0">${esc(scoring.assessments[0].rationale)}</p>` : ''}
+          </div>`;
+      }
+
+      case ScoringState.UNAVAILABLE:
+        return `
+          <p class="result-title">Sesión guardada</p>
+          <div class="card stack">
+            <p class="muted" style="margin:0">${esc(unavailableMessage(scoring.reason))}</p>
+            ${scoring.reason === 'plan'
+              ? '<button class="btn btn--primary btn--compact" type="button" data-go="plans">Ver planes</button>'
+              : ''}
+          </div>`;
+
+      default:
+        return `<p class="result-title">¡Sesión completada!</p>`;
+    }
+  }
+
+  function transcriptBlock() {
+    if (scoring.transcripts.length === 0) return '';
+    const hasText = scoring.transcripts.some((t) => t.text.trim());
+    if (!hasText) return '';
+    return `
+      <div class="section">
+        <h2 class="section__title">Transcripción</h2>
+        ${scoring.transcripts.filter((t) => t.text.trim()).map((t) => `
+          <div class="card stack" style="gap:8px">
+            <p class="eyebrow" style="margin:0">${esc(t.roundLabel)}</p>
+            <div class="transcript">${esc(t.text)}</div>
+          </div>`).join('')}
+      </div>`;
+  }
+
+  function view() {
+    return `
+      <div class="screen screen--flow">
+        <div style="text-align:center;margin-top:8px">
+          <span class="achv__badge" style="width:74px;height:74px;margin:0 auto">
+            ${icon('crown', { size: 36 })}
+          </span>
+        </div>
+
+        <div data-slot="xp">${xpBlock()}</div>
+
+        ${result.streakAdvanced && result.streakDays > 0 ? `
+          <span class="pill pill--gold" style="align-self:center">
+            ${icon('flame', { size: 15 })} Racha de ${result.streakDays} día${result.streakDays === 1 ? '' : 's'}
+          </span>` : ''}
+
+        <div class="card stack">
+          <h2 style="font-size:16px;font-weight:700">Resumen</h2>
+          ${summaryRows([
+            ['Modo', record.modeName],
+            ['Cadencia', record.difficultyLabel],
+            ['Rondas', `${record.roundsCompleted} / ${record.roundsPlanned}`],
+            ['Tiempo en el micro', formatDurationSeconds(record.practiceSeconds)],
+            ...(record.rhymeKeys.length ? [['Rimas', record.rhymeKeys.map((k) => `-${k}`).join(' · ')]] : []),
+          ])}
+        </div>
+
+        ${!result.unbanked && store.accruesXp ? `
+          <div class="card stack">
+            <div class="row row--between" style="align-items:flex-end">
+              <span>
+                <span class="dim" style="display:block">Nivel</span>
+                <span style="font-size:26px;font-weight:800">Nivel ${result.level}</span>
+              </span>
+              <span style="color:var(--accent-bright);font-weight:700">
+                ${result.xpIntoLevel} / ${result.xpForNextLevel} XP
+              </span>
+            </div>
+            ${progressBar(result.xpForNextLevel ? result.xpIntoLevel / result.xpForNextLevel : 0)}
+          </div>` : ''}
+
+        ${result.newlyUnlockedAchievements.length ? `
+          <div class="section">
+            <h2 class="section__title">Logros desbloqueados</h2>
+            <div class="list">${result.newlyUnlockedAchievements.map(achievementRow).join('')}</div>
+          </div>` : ''}
+
+        <div data-slot="transcript">${transcriptBlock()}</div>
+
+        <div class="btn-row">
+          <button class="btn btn--outline" type="button" data-action="again">
+            ${record.isBattle ? 'REVANCHA' : 'VOLVER A PRACTICAR'}
+          </button>
+          <button class="btn btn--primary" type="button" data-action="exit">SALIR</button>
+        </div>
+
+        <button class="btn btn--ghost btn--compact" type="button" data-action="share">
+          ${icon('share', { size: 17 })} Compartir resultado
         </button>
       </div>`;
-    feedbackHost.querySelector('[data-action="analyze"]').addEventListener('click', runAnalysis);
   }
 
-  function feedbackLoading() {
-    feedbackHost.innerHTML = `
-      <h2 class="section__title">Análisis con IA</h2>
-      <div class="card row" style="gap:14px">
-        <span class="spinner"></span>
-        <span class="muted">Transcribiendo y evaluando tu ronda…</span>
-      </div>`;
+  function paint() {
+    root.innerHTML = view();
+    wire();
   }
 
-  function feedbackError(message, canRetry) {
-    feedbackHost.innerHTML = `
-      <h2 class="section__title">Análisis con IA</h2>
-      <div class="card stack">
-        <p class="muted" style="margin:0">${esc(message)}</p>
-        ${canRetry
-          ? `<button class="btn btn--outline" type="button" data-action="analyze">Reintentar</button>`
-          : ''}
-      </div>`;
-    feedbackHost.querySelector('[data-action="analyze"]')?.addEventListener('click', runAnalysis);
-  }
+  function wire() {
+    root.querySelectorAll('[data-go]').forEach((el) =>
+      el.addEventListener('click', () => navigate(el.dataset.go)));
 
-  function feedbackResult(data) {
-    feedbackHost.innerHTML = `
-      <h2 class="section__title">Análisis con IA</h2>
-      <div class="card feedback-card">
-        <div class="feedback-score">
-          <b class="display">${data.total.toFixed(1)}</b>
-          <span class="muted">/ 10 · puntuación media</span>
-        </div>
+    root.querySelector('[data-action="again"]')?.addEventListener('click', () =>
+      navigate(record.isBattle ? `battleRoom?presetId=${encodeURIComponent(record.modeId)}` : 'entrenar'));
 
-        ${FEEDBACK_DIMENSIONS.map(({ key, label }) => `
-          <div class="feedback-dim">
-            <div class="feedback-dim__head">
-              <span style="font-weight:600">${esc(label)}</span>
-              <span class="muted">${data.scores[key].toFixed(1)}</span>
-            </div>
-            ${progressBar(data.scores[key] / 10, { thin: true })}
-          </div>`).join('')}
+    root.querySelector('[data-action="exit"]')?.addEventListener('click', () => navigate('train'));
 
-        <div class="row" style="gap:20px;flex-wrap:wrap">
-          <span><span class="dim" style="display:block">Palabras</span><b>${data.wordCount}</b></span>
-          <span><span class="dim" style="display:block">Palabras/min</span><b>${Math.round(data.wordsPerMinute)}</b></span>
-        </div>
-
-        ${data.strengths.length ? `
-          <div class="stack" style="gap:6px">
-            <p class="eyebrow" style="margin:0">Lo que funcionó</p>
-            <ul class="muted" style="margin:0;padding-left:18px">
-              ${data.strengths.map((s) => `<li>${esc(s)}</li>`).join('')}
-            </ul>
-          </div>` : ''}
-
-        ${data.improvements.length ? `
-          <div class="stack" style="gap:6px">
-            <p class="eyebrow" style="margin:0">A trabajar</p>
-            <ul class="muted" style="margin:0;padding-left:18px">
-              ${data.improvements.map((s) => `<li>${esc(s)}</li>`).join('')}
-            </ul>
-          </div>` : ''}
-
-        ${data.transcript ? `
-          <div class="stack" style="gap:6px">
-            <p class="eyebrow" style="margin:0">Transcripción</p>
-            <div class="transcript">${esc(data.transcript)}</div>
-          </div>` : ''}
-      </div>`;
-  }
-
-  async function runAnalysis() {
-    feedbackLoading();
-    try {
-      const data = await analyzeRound(recordings[0], {
-        modeName: record.modeName,
-        difficultyLabel: record.difficultyLabel,
-        rhymeKey: record.rhymeKeys[0] || '',
-        stimulusWords: [],
-        durationSeconds: record.practiceSeconds,
-      });
-      feedbackResult(data);
-    } catch (err) {
-      const isKnown = err instanceof FeedbackUnavailable;
-      const retryable = !isKnown || !['disabled', 'no-audio', 'too-large'].includes(err.reason);
-      feedbackError(
-        isKnown ? err.message : 'No se pudo analizar la ronda.',
-        retryable
-      );
-    }
-  }
-
-  if (canAnalyze || isFeedbackEnabled()) feedbackIdle();
-
-  /* ---------- actions ---------- */
-
-  root.querySelectorAll('[data-go]').forEach((el) =>
-    el.addEventListener('click', () => navigate(el.dataset.go)));
-
-  root.querySelector('[data-action="retry"]').addEventListener('click', () =>
-    navigate(`sessionSetup?presetId=${encodeURIComponent(record.modeId)}`));
-
-  root.querySelector('[data-action="share"]').addEventListener('click', async () => {
-    const text = `Acabo de completar una sesión de ${record.modeName} en Freestyle Academy: `
-      + `+${record.xpEarned} XP en ${record.roundsCompleted} ronda(s).`;
-    if (navigator.share) {
+    root.querySelector('[data-action="share"]')?.addEventListener('click', async () => {
+      const xp = record.xpEarned > 0 ? ` · +${record.xpEarned} XP` : '';
+      const text = `Acabo de entrenar freestyle en Freestyle Academy: `
+        + `${record.roundsCompleted} ronda(s) de ${record.modeName}${xp}.`;
+      if (navigator.share) {
+        try { await navigator.share({ title: 'Freestyle Academy', text }); return; } catch { /* dismissed */ }
+      }
       try {
-        await navigator.share({ title: 'Freestyle Academy', text });
-        return;
-      } catch { /* user dismissed */ }
-    }
-    try {
-      await navigator.clipboard.writeText(text);
-      toast('Resultado copiado al portapapeles');
-    } catch {
-      toast('No se pudo compartir en este navegador');
-    }
+        await navigator.clipboard.writeText(text);
+        toast('Resultado copiado');
+      } catch { toast('No se pudo compartir aquí'); }
+    });
+  }
+
+  resetAccent();
+  paint();
+
+  // The evaluation lands after the screen is already up.
+  const offScoring = scoring.on(() => {
+    const xpHost = root.querySelector('[data-slot="xp"]');
+    const trHost = root.querySelector('[data-slot="transcript"]');
+    if (xpHost) xpHost.innerHTML = xpBlock();
+    if (trHost) trHost.innerHTML = transcriptBlock();
+    wire();
   });
+  const offResult = store.on('result', paint);
+
+  return () => { offScoring(); offResult(); };
 }

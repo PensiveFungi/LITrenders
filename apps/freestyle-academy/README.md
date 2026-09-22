@@ -1,223 +1,176 @@
-# Freestyle Academy — Web
+# Freestyle Academy — web
 
-A full web port of the Freestyle Academy Android app, for **litrenders.com**.
+The Android app on the web. Same product, same backend, same rules: plain ES
+modules, no framework, no bundler, no build step, so what is served is what was
+written.
 
-No build step, no bundler, no `npm install` for the site itself. Plain ES
-modules that any static host will serve — which also means you can edit it on
-the 2013 MacBook without a toolchain.
-
----
-
-## What's here
-
-```
-freestyle-academy-web/
-├── index.html                  entry point
-├── manifest.webmanifest        installable as a PWA
-├── firebase.json               Hosting config + /api rewrite to the function
-├── firestore.rules             user data + entitlement rules
-├── assets/
-│   ├── css/styles.css          the Void design system
-│   └── js/
-│       ├── app.js              nav graph + bottom nav (≙ MainActivity.kt)
-│       ├── core/
-│       │   ├── config.js       ← THE ONLY FILE YOU MUST EDIT
-│       │   ├── domain.js       ≙ domain/ (XP, levels, streaks, timers)
-│       │   ├── store.js        ≙ AppViewModel + both repositories
-│       │   ├── router.js       ≙ the Compose NavHost
-│       │   ├── audio.js        mic metering + per-round recording
-│       │   ├── firebase.js     Google sign-in + Firestore sync
-│       │   └── feedback.js     AI feedback client
-│       ├── data/
-│       │   ├── modes.js        ≙ TrainingModes.kt + TrainingModeVisuals.kt
-│       │   └── rhymes.js       ≙ RhymeData.kt  (SEED EXTRACT — see below)
-│       ├── ui/                 icons + shared components
-│       └── screens/            one file per screen
-└── functions/
-    ├── index.js                Groq STT + LLM scoring proxy
-    └── package.json
-```
-
-Every route from the Android app is here:
-
-| Route | Screen |
-|---|---|
-| `#/train` | Home — dashboard, featured mode, all 11 modes |
-| `#/battles` | Batallas — honestly labelled "coming soon", as in the app |
-| `#/progress` | Progreso — XP, streaks, weekly chart, skill split |
-| `#/profile` | Perfil — stats, achievements, **account & sync** |
-| `#/sessionSetup?presetId=` | Configure a session |
-| `#/session` | Live session — timer, stimuli, mic |
-| `#/results` | Results — XP, level, achievements, **AI feedback** |
-| `#/library` · `#/rhyme/{key}` | Rhyme library and editor |
-| `#/history` | Add/remove log |
-| `#/settings` | Theme, sync status, data reset |
+It is a **port of the Kotlin source**, not a reimplementation from the screens.
+Every number in here — the level costs, the racha rule, the word-rotation
+cadences, the entitlement gates, the ten logros, the XP ceilings and
+multipliers — came out of `app/src/main/java/com/freestyle/academy/` and can be
+diffed against it.
 
 ---
 
-## Running it locally
+## Running it
 
-```bash
-cd freestyle-academy-web
-python3 -m http.server 8099
-# open http://localhost:8099
+Open `app.html`. That is the whole app. `index.html` is the page about it on
+litrenders.com, which embeds `app.html` in a frame.
+
+Locally, serve the folder over HTTP (ES modules and the microphone both need an
+origin — `file://` will not do):
+
+```sh
+python3 -m http.server 8000
+# then open http://localhost:8000/apps/freestyle-academy/app.html
 ```
 
-It must be served over `http://` or `https://`, not opened as a `file://`
-path — ES modules and the microphone both require a real origin.
+## Turning it on
 
-**It works fully out of the box**: local progress, all 11 modes, the rhyme
-library. Sign-in and AI feedback stay dormant until you configure them.
+Everything below is in `assets/js/core/config.js`.
+
+### 1. Firebase — the accounts and the AI
+
+With an empty config the app runs as a **guest** on this browser: every round
+plays, nothing is banked, no AI scoring runs. That is the app's own guest
+behaviour, not a degraded mode, so the page is shippable as it stands.
+
+To connect it to the same project the Android app uses (`academy-79fd1940`):
+
+1. Firebase Console → Project settings → General → Your apps → **Add app → Web**.
+   The Android app's `google-services.json` will not work: `appId` is
+   per-platform.
+2. Paste the generated object into `FIREBASE_CONFIG`.
+3. Authentication → Settings → **Authorized domains** → add `litrenders.com`.
+   Google sign-in is rejected from domains that are not listed.
+
+These values are public by design. `firestore.rules` is what protects the data.
+
+**No new backend was deployed for the web.** It calls the same callables the
+Android app calls — `scoreFreestyle`, `groqTranscribe`, `submitBugReport` — which
+already hold the Groq key in Secret Manager and already require a signed-in
+caller. The league table (`clubGlobal`) is still written by the Cloud Function
+triggers and by nothing else.
+
+### 2. Beats
+
+`BEAT_FILES` is deliberately empty. The six MP3s in the APK are unlicensed free
+"type beats": shipping them inside an APK is one exposure, serving them as
+downloadable files from a public website is a larger one. The transport, the
+playlist rules and the selector are all wired — drop licensed tracks into
+`assets/beats/` and list their filenames in `BEAT_FILES` and the feature turns
+on with no code change.
+
+### 3. Avatar artwork
+
+The app ships 27 bundled 512×512 PNG avatars in its Android `res/` folder. They
+were not part of the source copy this port was built from, so the web draws a
+distinct mark per avatar id instead — same 27 ids, same order, same free-tier
+five first. To use the real artwork, copy the PNGs to `assets/img/avatars/` as
+`<avatar_id>.png` and set `AVATAR_ART_BASE` to that folder.
+
+### 4. Legal documents
+
+`LEGAL_DOCUMENTS` points at `terms.html` and `privacy.html` in this folder. The
+consent gate links to them and will not let anyone past until they are accepted.
+Bumping `LEGAL_VERSION` in `core/store.js` asks everyone to accept again.
 
 ---
 
-## Going live — 3 steps
+## What is here
 
-### 1. Firebase config
-
-Fill in `assets/js/core/config.js` from
-**Firebase Console → Project settings → General → Your apps → Web app**.
-
-Then in **Authentication → Settings → Authorized domains**, add
-`litrenders.com`. Google sign-in is rejected from unlisted domains.
-
-Publish the rules:
-
-```bash
-firebase deploy --only firestore:rules
+```
+app.html                     the app shell
+assets/css/styles.css        the design system, on Color.kt + DesignTokens.kt
+assets/img/stimuli/          25 scene .webp + 48 object .svg — the app's own art
+assets/js/app.js             the nav graph, the bottom bar, the two gates
+assets/js/core/              the ported domain + the platform layer
+assets/js/data/              the rhyme library, the stimuli, the round catalog
+assets/js/screens/           one module per screen
+assets/js/ui/                icons, avatars, shared widgets
 ```
 
-### 2. The AI feedback function
+### The domain, ported
 
-```bash
-cd functions
-npm install
-firebase functions:secrets:set GROQ_API_KEY      # paste your Groq key
-cd ..
-firebase deploy --only functions
-```
+| Web | Kotlin |
+| --- | --- |
+| `core/domain.js` | `domain/Difficulty.kt`, `Leveling.kt`, `Streaks.kt`, `Achievements.kt`, `RoundMechanics.kt`, `RecentDays.kt` |
+| `core/ai.js` | `ai/AiScoring.kt`, `ai/XpMultipliers.kt` |
+| `core/plans.js` | `data/Plans.kt`, `data/DataScope.kt` |
+| `core/rhyme-library.js` | `domain/RhymeLibrary.kt` |
+| `core/battle.js` | `battles/offline/OfflineBattleModels.kt` |
+| `core/store.js` | `AppViewModel` + the repositories |
+| `core/firebase.js` | `ai/CloudBackend.kt` + the Firestore documents |
+| `core/recordings.js` | the kept-recording register (`model/KeptRecording`) |
+| `data/rounds.js` | `battles/entrenar/`, `masterserie/`, `gallos/` models |
 
-The key lives in Secret Manager and never reaches the browser. The browser
-posts audio to `/api/analyzeRound`; the `firebase.json` rewrite routes that to
-the function on the same origin, so **there is no CORS to configure**.
+### Three rules worth keeping straight
 
-If you host the site somewhere other than Firebase Hosting, set
-`AI_FEEDBACK_ENDPOINT` in `config.js` to the function's absolute URL and add
-your origin to `ALLOWED_ORIGINS` in `functions/index.js`.
+**XP comes only from the AI.** There is no XP formula anywhere in this codebase,
+deliberately — the app removed it. A session is written with `xpEarned: 0` and
+the award is applied afterwards, if and only if the evaluation of the real
+recording produced one. Every failure mode is honest: no audio, no plan, no
+connection, a failed pass — the session earns nothing and the screen says which.
 
-### 3. Deploy the site
+**The clock counts up.** A round ends on "PRÓXIMA RONDA" / "TERMINAR" or the mic
+passes on "PRÓXIMA ENTRADA". Never on the clock. The ring fills toward the
+round's nominal 60s and then stays full.
 
-```bash
-firebase deploy --only hosting
-```
-
-Or upload the folder to any static host. Nothing needs compiling.
+**A guest banks nothing.** Not sessions, not minutes, not racha, not logros. It
+is enforced on both sides: nothing is written, and reads return zeros rather
+than whatever an older build may have left behind. A Gratis *account* is
+different — it keeps its racha, sessions and the three free logros, and earns no
+XP.
 
 ---
 
-## Regenerating the rhyme dictionary
+## What is not here
 
-⚠️ **`assets/js/data/rhymes.js` is a seed extract, not the full Android
-dataset.** It holds 28 groups transcribed from `RhymeData.kt`; the Kotlin file
-has more.
-
-`tools/extract-rhymes.py` regenerates the whole file. Point it at your clone
-of the app repo:
-
-```bash
-cd freestyle-academy-web
-python3 tools/extract-rhymes.py ~/path/to/FreestyleAcademy > assets/js/data/rhymes.js
-```
-
-It prints a per-group word count to stderr so you can sanity-check the result
-before shipping:
-
-```
-Parsed 44 groups, 14812 words from .../RhymeData.kt
-  -ADA: 213
-  -ADO: 287
-  ...
-```
-
-It parses by matching parentheses rather than by regex, so the last group in
-the file isn't silently dropped, and it refuses to write an empty dictionary
-rather than quietly blanking your library.
-
-Existing users keep their edits: the store merges any **new** groups into
-saved data on load, exactly as `RhymeRepository` does on Android.
+- **Studio generation.** The tab, the gates, the daily credit ledger and the
+  recordings library are real. Creating a tema or an instrumental is not: the
+  request body for the `kieGenerate` callable is assembled in the app's Studio
+  repository, which was not in the source this port was built from, and guessing
+  at it would mean inventing a contract the backend never agreed to. The screen
+  says so rather than pretending.
+- **Online battles.** They do not exist for any plan in the app either
+  (`ONLINE_BATTLES_LAUNCHED = false`). Both local battle modes work.
+- **Ads.** No ad SDK on the web, so `removesAds` is an entitlement with nothing
+  behind it yet.
 
 ---
 
-## How this maps to the Android app
+## Compatibility with the Android app
 
-The domain layer is a **line-for-line port**, verified against the same
-numbers as the Kotlin JUnit tests:
+One account, two clients. The web reads and writes the same documents:
 
-| Kotlin | Web |
-|---|---|
-| `SessionRewards.kt` | 8 XP/min · 15/round · 3/prompt · +25 complete · +2/streak day (cap 30) |
-| `Leveling.kt` | cost(N) = 200 + (N−1)×100 |
-| `Streaks.kt` | same day holds · next day +1 · any gap resets to 1 |
-| `SessionTimer.kt` | absolute end-timestamp, drift-free |
-| `StimulusRotation.kt` | prefers unused keys / non-repeating words |
-| `Achievements.kt` | the same 8 achievements, same thresholds |
-| `TrainingModes.kt` | all 11 presets, durations asserted |
+- `users/{uid}/progress/progress` — whole-document last-write-wins, as the app
+  syncs it.
+- `users/{uid}/rhymes/rhymes` — the overlay only (a few hundred bytes), never
+  the whole library.
+- `users/{uid}/profile/profile` — the avatar field is `avatarStyleId` on the
+  wire, matching `model/Models.kt`; the web keeps `avatarId` internally and
+  translates in `core/firebase.js`.
+- `rhymeLibrary/manifest` + `chunk_N` — checked once per launch, for guests too.
+  A manifest whose group count disagrees with what arrived is not trusted.
 
-Session timing keeps the app's contract: **the countdown runs before the timer
-unpauses**, so setup time is never charged to the round.
-
-Storage mirrors `SharedPreferences` under the same key names, in
-`localStorage` — so a browser behaves like a device, and clearing site data is
-the equivalent of clearing app storage.
+Local storage keys mirror the app's `SharedPreferences` names, partitioned by
+data scope (`guest` vs `acct_<uid>`), so a guest's data and each account's stay
+separate on the same browser. Kept recordings live in IndexedDB under the same
+partitioning.
 
 ---
 
-## Subscriptions (groundwork, not yet wired)
+## Verified
 
-`firestore.rules` already enforces the shape the payment work needs:
+Two headless Chromium suites at 360 × 760 (Galaxy A10 width), 63 checks:
 
-- `users/{uid}.entitlement` is **readable by the user but never writable by
-  them.** Only the payment webhook, running with Admin SDK privileges in a
-  Cloud Function, can set it. That's what stops someone granting themselves
-  Pro from the browser console.
-- `auth.entitlement` in `firebase.js` already reads that field, and Ajustes
-  already displays the tier.
-
-When you pick a Merchant of Record, the remaining work is one webhook function
-that writes `entitlement` to the same document. The app then reads the same
-field, and one subscription covers both.
-
----
-
-## Known limitations
-
-- **Battles and Studio are not implemented**, matching `main`. The repo has no
-  multiplayer, no Suno integration and no Freestyle Club; this port doesn't
-  invent them. `BattlesScreen` shows the same honest "calentando motores"
-  message as the app.
-- **The "Imágenes" mode uses generated SVG scenes**, not photography — the
-  Android repo ships no image assets either (`res/` holds only `themes.xml`).
-- **No backing-beat playback.** The app doesn't have it either. If you add it,
-  revisit `echoCancellation` in `audio.js`: with a beat playing through the
-  speakers it will bleed into the mic and hurt transcription, and turning
-  echo cancellation off costs you noise suppression. This is the single
-  biggest technical risk in the web version — budget real time for it.
-- **`MediaRecorder` is unavailable in a few older browsers.** Sessions still
-  work; only the AI analysis is skipped, and the UI says so rather than
-  failing silently.
-- **Rate limiting in the function is per-instance and in-memory.** It's a
-  courtesy guard, not a quota. Move the counter into Firestore before you
-  depend on it for cost control.
-- **Sync is last-write-wins at document level.** Fine for one person on a
-  phone and a laptop; it is not a merge strategy for concurrent edits.
-
----
-
-## Testing
-
-The domain port was verified against the Kotlin test values (28 assertions),
-and the app was driven end-to-end in headless Chromium at 360 px: every route
-loads, a full FMS session runs start to finish with correct XP, achievements
-unlock, the Incremental mode steps 60→45→30→20, manual rhyme selection is
-honoured, partial sessions record correctly, and there is no horizontal
-overflow at 320 px.
+- Both gates, the five tabs, and all 22 stacked routes.
+- A full solo session: round picker → count-up clock → finish → results.
+- A battle: lineup, handoff, ATAQUE role, PRÓXIMA ENTRADA.
+- Master Serie's pool vs. Gallos's — Gallos has no cadence rounds, and the two
+  theme pools are different lists.
+- Rhyme editing through the overlay, including that re-adding a word the group
+  already has writes nothing.
+- Every Plus/Pro gate closing again when the plan drops to Gratis, and the
+  locked Studio tab routing to Planes.
+- No horizontal scroll on any main route at 360px.

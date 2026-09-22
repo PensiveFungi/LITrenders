@@ -11,7 +11,8 @@ let notFound = null;
 let currentCleanup = null;
 let currentRoute = null;
 
-export const TOP_LEVEL_ROUTES = ['train', 'battles', 'progress', 'profile'];
+/** The five bottom-tab routes, in the order MainActivity lists them. */
+export const TOP_LEVEL_ROUTES = ['studio', 'battles', 'train', 'progress', 'profile'];
 
 export function register(pattern, handler) {
   routes.set(pattern, handler);
@@ -19,6 +20,17 @@ export function register(pattern, handler) {
 
 export function setNotFound(handler) {
   notFound = handler;
+}
+
+/**
+ * Runs after every render, however the route was reached — a hash change, a
+ * replace-navigation or an explicit re-render. The shell (bottom bar, gates)
+ * hangs off this rather than off `hashchange`, because a replace-navigation
+ * changes the route without firing that event.
+ */
+let afterRender = null;
+export function setAfterRender(handler) {
+  afterRender = handler;
 }
 
 /** Parses "#/rhyme/ADA?x=1" into { path: 'rhyme/ADA', query: URLSearchParams }. */
@@ -99,6 +111,10 @@ export function render() {
   if (typeof result === 'function') currentCleanup = result;
 
   window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
+
+  if (typeof afterRender === 'function') {
+    try { afterRender(path); } catch (err) { console.error('[router] afterRender', err); }
+  }
 }
 
 export function start() {
