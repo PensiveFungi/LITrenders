@@ -1,0 +1,21 @@
+{
+  "name": "Freestyle Academy",
+  "short_name": "Freestyle",
+  "description": "Entrena tu mente. Domina las palabras. Entrenamiento de freestyle en español.",
+  "start_url": "./index.html#/train",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#05060B",
+  "theme_color": "#05060B",
+  "lang": "es",
+  "categories": ["education", "music", "entertainment"],
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='112' fill='%2305060B'/%3E%3Cpath d='M96 384V128h224M96 264h176' stroke='%236F3AF3' stroke-width='52' stroke-linecap='round' fill='none'/%3E%3Ccircle cx='384' cy='352' r='48' fill='%2318B8C7'/%3E%3C/svg%3E",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

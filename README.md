@@ -80,9 +80,10 @@ grep -rn 'class="ph"' --include="*.html" .
 | Placeholder | Where | What to put |
 |---|---|---|
 | `[COUNTRY / JURISDICTION]` (×6) | all three `terms.html` | The country whose law governs your terms, e.g. `Uruguay`. |
-| `[AI PROVIDER]` + its policy URL | `apps/torchwake/privacy.html` | The company whose model writes the narration, and a link to its privacy policy. |
-| `[TTS PROVIDER]` + its policy URL | `apps/torchwake/privacy.html` | Whoever supplies the cloud narrator voice. |
-| `[IMAGE PROVIDER]` + its policy URL | `apps/torchwake/privacy.html` | Whoever generates the character portraits. |
+| `[AI PROVIDER]` + its policy URL | `apps/freestyle-academy/privacy.html` | The company that transcribes and scores a round, and a link to its privacy policy. |
+| `[FONT PROVIDER PRIVACY POLICY URLS]` | `apps/freestyle-academy/privacy.html` | Google Fonts and Fontshare — the app's two typefaces are fetched from them on every load. |
+| `[… ANDROID BUILD …]` (×2) | `apps/freestyle-academy/privacy.html` | Two reminders to check the policy and the Data safety table against the shipped Android app. |
+| `[IF A SUBSCRIPTION SHIPS …]` | `apps/freestyle-academy/terms.html` | Rewrite the Purchases section before anything goes on sale. |
 | `[EXCHANGE-RATE PROVIDER]` + its policy URL | `apps/budget-calendar/privacy.html` | The rates API the budget app calls. |
 
 Also worth doing before launch:
@@ -123,13 +124,19 @@ assets/fonts/             Inter + Archivo Black, self-hosted (SIL OFL, licences 
 assets/img/               logo, inverse logo, favicons
 ```
 
-No cookies, no analytics, no third-party requests — the site loads nothing it does not serve itself.
+No cookies and no analytics anywhere. The site serves its own fonts and images, with two deliberate
+exceptions, both inside an app's own web build and neither on a documentation page:
+
+- `apps/budget-calendar/app.html` loads AdSense (see the AdSense section above).
+- `apps/freestyle-academy/app.html` loads its two typefaces from Google Fonts and Fontshare, and — once
+  `assets/js/core/config.js` is filled in — the Firebase SDK from `gstatic.com`.
+
 If you ever add analytics, update `legal/privacy.html`, which currently promises otherwise.
 
 ## 5. Adding a new app
 
 1. `cp -r apps/iondrive apps/new-app-slug` (copy the closest match — `iondrive` for an offline app,
-   `torchwake` for one that talks to a cloud service).
+   `freestyle-academy` for one that talks to a cloud service).
 2. In the four files, replace the name, slug, description, feature list and tile SVG.
 3. Rewrite the privacy policy to match what the app *actually* does. This is the one file that must
    never be copied unread.

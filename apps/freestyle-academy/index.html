@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Freestyle Academy — LITrenders</title>
+<meta name="description" content="Freestyle rap training that runs in your browser: eleven training modes, a rhyme library, a timer built for rounds, and progress that stays on your own machine.">
+<link rel="canonical" href="https://litrenders.com/apps/freestyle-academy/">
+<meta property="og:title" content="Freestyle Academy — LITrenders">
+<meta property="og:description" content="Freestyle rap training that runs in your browser. Eleven modes, a rhyme library, and a round timer — nothing to install.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://litrenders.com/apps/freestyle-academy/">
+<meta property="og:image" content="https://litrenders.com/assets/img/icon-512.png">
+<meta name="twitter:card" content="summary">
+<meta name="theme-color" content="#0d0d0d">
+<link rel="icon" href="../../assets/img/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" href="../../assets/img/favicon-64.png">
+<link rel="apple-touch-icon" href="../../assets/img/apple-touch-icon.png">
+<link rel="preload" as="font" type="font/woff2" href="../../assets/fonts/inter-latin-wght-normal.woff2" crossorigin>
+<link rel="preload" as="font" type="font/woff2" href="../../assets/fonts/archivo-black-latin-400-normal.woff2" crossorigin>
+<link rel="stylesheet" href="../../assets/css/site.css">
+<style>
+  /* Page-specific: the frame the app runs inside, matching Budget Calendar's. */
+  .stage { background: var(--ink); padding-block: clamp(32px, 5vw, 64px); }
+  .stage-inner { display: grid; grid-template-columns: minmax(300px, 430px) 1fr; gap: clamp(28px, 4vw, 64px); align-items: start; }
+  .device {
+    position: relative; background: #000; border: 1px solid #2b2b2b; padding: 10px;
+    box-shadow: 0 30px 70px rgba(0,0,0,.45);
+  }
+  .device iframe { display: block; width: 100%; height: min(78vh, 780px); min-height: 560px; border: 0; background: #05060b; }
+  .device-bar {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 0 4px 10px; color: var(--muted-inv);
+    font-size: .68rem; text-transform: uppercase; letter-spacing: .18em;
+  }
+  .device-bar a { color: var(--paper); text-underline-offset: 3px; }
+  .stage-side h3 { font-size: .95rem; font-weight: 600; color: var(--paper); margin: 0 0 10px; }
+  .stage-side p { color: #d6d6d3; font-size: .92rem; line-height: 1.65; margin: 0 0 22px; max-width: 52ch; }
+  .stage-side ul { list-style: none; margin: 0 0 22px; padding: 0; }
+  .stage-side li { color: #d6d6d3; font-size: .9rem; line-height: 1.6; padding: 11px 0; border-top: 1px solid #2b2b2b; max-width: 52ch; }
+  .stage-side li strong { color: var(--paper); font-weight: 600; }
+  @media (max-width: 900px) {
+    .stage-inner { grid-template-columns: 1fr; }
+    .device iframe { height: 72vh; min-height: 520px; }
+  }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav">
+  <div class="nav-inner">
+    <nav class="nav-links" id="nav-links" aria-label="Primary">
+      <a href="../../apps/" aria-current="page">Apps</a>
+      <a href="../../index.html#studio">Studio</a>
+      <a href="../../index.html#contact">Contact</a>
+    </nav>
+    <a class="nav-mark" href="../../index.html" aria-label="LITrenders — home">
+      <img src="../../assets/img/logo-mark.png" alt="LITrenders" width="30" height="34">
+    </a>
+    <div class="nav-end">
+      <a href="mailto:litrenders@gmail.com">litrenders@gmail.com</a>
+    </div>
+    <button class="nav-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="nav-links"><span></span></button>
+  </div>
+</header>
+<main id="main">
+<section class="app-hero">
+  <div class="container">
+    <p class="crumbs" style="color:var(--muted-inv)"><a href="../" style="color:inherit">Apps</a> &nbsp;/&nbsp; Freestyle Academy</p>
+    <div class="app-hero-grid">
+      <div>
+        <h1 class="display h2">Freestyle Academy</h1>
+        <p class="lede">A training room for improvised rap, built the way a practice session actually runs: pick a mode, set a round length, and the timer starts feeding you words to rhyme against. It runs right here in your browser &mdash; nothing to install, no account required, and your progress stays on your own machine. The app's interface is in Spanish.</p>
+        <div class="btn-row mt-lg">
+          <a class="btn btn--onDark btn--sm" href="#run">Run it below</a>
+          <a class="btn btn--onDark btn--sm" href="app.html">Open full screen</a>
+          <a class="btn btn--ghost btn--sm" href="support.html" style="color:var(--paper);border-color:rgba(255,255,255,.4)">Support</a>
+        </div>
+      </div>
+      <div><svg class="app-tile" viewBox="0 0 400 300" role="img" aria-label="Freestyle Academy">
+  <rect width="400" height="300" fill="#0d0d0d"/>
+  <g fill="none" stroke="#ffffff" stroke-width="2">
+    <polygon points="200,44 264,81 264,155 200,192 136,155 136,81"/>
+  </g>
+  <rect x="189" y="74" width="22" height="46" rx="11" fill="#ffffff"/>
+  <g fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round">
+    <path d="M176 112 a24 24 0 0 0 48 0"/>
+    <path d="M200 136 v20"/>
+    <path d="M185 156 h30"/>
+  </g>
+  <g fill="#ffffff">
+    <g opacity=".3">
+      <rect x="62" y="235" width="6" height="14"/><rect x="78" y="229" width="6" height="26"/><rect x="94" y="220" width="6" height="44"/><rect x="110" y="227" width="6" height="30"/><rect x="126" y="213" width="6" height="58"/><rect x="142" y="223" width="6" height="38"/>
+      <rect x="254" y="223" width="6" height="38"/><rect x="270" y="213" width="6" height="58"/><rect x="286" y="227" width="6" height="30"/><rect x="302" y="220" width="6" height="44"/><rect x="318" y="229" width="6" height="26"/><rect x="334" y="235" width="6" height="14"/>
+    </g>
+    <rect x="158" y="207" width="6" height="70"/><rect x="174" y="217" width="6" height="50"/><rect x="190" y="199" width="6" height="86"/><rect x="206" y="199" width="6" height="86"/><rect x="222" y="217" width="6" height="50"/><rect x="238" y="207" width="6" height="70"/>
+  </g>
+</svg></div>
+    </div>
+  </div>
+</section>
+
+<section class="stage" id="run">
+  <div class="container">
+    <div class="stage-inner">
+      <div>
+        <div class="device-bar">
+          <span>Freestyle Academy &mdash; live</span>
+          <a href="app.html" target="_blank" rel="noopener">Open in a new tab &rarr;</a>
+        </div>
+        <div class="device">
+          <iframe src="app.html" title="Freestyle Academy, running in your browser" loading="lazy" allow="microphone"></iframe>
+        </div>
+      </div>
+      <aside class="stage-side">
+        <h3>What you are using</h3>
+        <p>The real thing, not a mockup or a video. Pick a mode, choose how long a round should last, and train. The
+        first session works without granting anything &mdash; the microphone is only asked for when you want the level
+        meter and the round recording.</p>
+        <ul>
+          <li><strong>Your progress stays here.</strong> XP, streaks, achievements, your rhyme library and your session
+          history are saved in this browser's own storage.</li>
+          <li><strong>Nothing to install.</strong> No account and no sign-up to train. Signing in is a separate,
+          optional choice that syncs your progress between devices.</li>
+          <li><strong>The microphone is optional.</strong> Decline it and every mode still runs; you lose the level
+          meter and the recording that the optional AI analysis needs.</li>
+          <li><strong>Better full screen.</strong> The layout is phone-first, so the round timer and the mic meter have
+          more room in their own tab than in this frame.</li>
+        </ul>
+        <p class="muted" style="color:var(--muted-inv);font-size:.82rem">Clearing your browser data clears your
+        progress with it, unless you have signed in and let it sync.</p>
+      </aside>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <p class="kicker">What it is</p>
+    <h2 class="display h3 tagline">Reps, not theory.</h2>
+    <ul class="feature-list mt-lg">
+      <li><div><strong>Eleven training modes</strong><br><span class="muted">Free rounds, forced rhyme endings, stimulus words, images, themes and an incremental mode that shortens the clock under you &mdash; 60 seconds, then 45, then 30, then 20.</span></div></li>
+      <li><div><strong>A round timer that behaves</strong><br><span class="muted">The countdown runs before the clock starts, so the seconds you spend getting ready are never charged to the round.</span></div></li>
+      <li><div><strong>A rhyme library you can edit</strong><br><span class="muted">Grouped by ending, searchable mid-session, and yours to add to. Your additions survive updates to the built-in list.</span></div></li>
+      <li><div><strong>Progress that accumulates</strong><br><span class="muted">XP per minute and per round, levels that cost more as you climb, practice streaks, and eight achievements with fixed thresholds.</span></div></li>
+      <li><div><strong>Optional AI analysis</strong><br><span class="muted">When it is switched on and you are signed in, a round can be transcribed and scored on the five dimensions freestyle is usually judged by. It is off by default and never required.</span></div></li>
+    </ul>
+    <ul class="facts">
+      <li><span>Runs on</span><span>Any modern browser, phone or desktop</span></li>
+      <li><span>Language</span><span>Spanish interface</span></li>
+      <li><span>Storage</span><span>Your own device &mdash; sign-in and sync are optional</span></li>
+      <li><span>Microphone</span><span>Optional &mdash; asked for only when a session starts</span></li>
+      <li><span>Developer</span><span>LITrenders (Bruno Camargo)</span></li>
+    </ul>
+  </div>
+</section>
+
+<section class="section section--tint">
+  <div class="container">
+    <p class="kicker">How it is built</p>
+    <h2 class="display h3 tagline">A port, not a rewrite.</h2>
+    <p class="lede mt-lg">Freestyle Academy started as an Android app in Kotlin. This is the same product on the web:
+    plain ES modules, no framework, no bundler and no build step, so what is served is what was written.</p>
+    <ul class="feature-list mt-lg">
+      <li><div><strong>The scoring rules are the same numbers</strong><br><span class="muted">XP, levelling cost, streak behaviour, timer contract, stimulus rotation and the achievement thresholds were ported line for line from the Kotlin and checked against the same test values.</span></div></li>
+      <li><div><strong>Local first, sync second</strong><br><span class="muted">Everything is written to the browser's storage under the same key names the Android app uses in its own preferences. Clearing site data is the equivalent of clearing app storage.</span></div></li>
+      <li><div><strong>The API key never reaches the browser</strong><br><span class="muted">AI analysis goes through a small server-side function that holds the key and returns only the result. The browser never sees a credential.</span></div></li>
+      <li><div><strong>Honest about what is missing</strong><br><span class="muted">Battles are not implemented and the app says so rather than pretending. Nothing in the interface promises a feature that has not been built.</span></div></li>
+      <li><div><strong>A palette of its own</strong><br><span class="muted">The product is not the brand. Freestyle Academy keeps its own dark, saturated look inside the frame while the page around it stays in the studio's ink and paper.</span></div></li>
+    </ul>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <p class="kicker">Documentation</p>
+    <h2 class="display h3">Policies &amp; support</h2>
+    <p class="lede mt-lg">Public, permanent URLs for the app's policies.</p>
+    <div class="doc-links mt-lg">
+      <a href="app.html"><strong>Open full screen</strong><small>The app on its own, with the whole window to itself.</small></a>
+      <a href="privacy.html"><strong>Privacy policy</strong><small>What the app sends, what it doesn't, and who else is involved.</small></a>
+      <a href="terms.html"><strong>Terms of use</strong><small>The agreement that covers using Freestyle Academy.</small></a>
+      <a href="support.html"><strong>Support</strong><small>Report a bug, ask a question, or request deletion of your data.</small></a>
+    </div>
+  </div>
+</section>
+</main>
+<footer class="footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div>
+        <img class="wordmark" src="../../assets/img/logo-wordmark-inv.png" alt="LITrenders" width="190" height="61">
+        <p>An independent development studio. Android apps, 3D visualization and design, made end to end.</p>
+      </div>
+      <div>
+        <h4>Apps</h4>
+        <ul>
+          <li><a href="../../apps/freestyle-academy/">Freestyle Academy</a></li>
+          <li><a href="../../apps/iondrive/">IonDrive</a></li>
+          <li><a href="../../apps/budget-calendar/">Budget Calendar</a></li>
+          <li><a href="../../apps/">All apps &amp; docs</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Studio</h4>
+        <ul>
+          <li><a href="../../index.html#studio">About</a></li>
+          <li><a href="mailto:litrenders@gmail.com">litrenders@gmail.com</a></li>
+          <li><a href="../../legal/privacy.html">Website privacy</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-base">
+      <span>&copy; <span data-year>2026</span> LITrenders. All rights reserved.</span>
+      <span>litrenders.com</span>
+    </div>
+  </div>
+</footer>
+<script src="../../assets/js/site.js" defer></script>
+</body>
+</html>
